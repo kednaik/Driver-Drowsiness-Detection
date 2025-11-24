@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+env/
+.env.*
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Logs
+logs/
+*.log
+
+# macOS
+.DS_Store
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# dlib / model files (large binary data)
+models/shape_predictor_68_face_landmarks.dat
+models/*.bz2
+
+# Audio files (if you want them out of repo during development)
+alarm/*.wav
+
+# pytest cache
+.pytest_cache/
+
+# egg and wheel
+*.egg-info/
+*.egg
+dist/
+build/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
+# System files
+Thumbs.db
+
+# Ignore compiled C extensions
+*.so
+/data
