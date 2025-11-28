@@ -222,6 +222,8 @@ class DrowsinessAnalyzer:
             # detection. This allows a one-second flashing notification after
             # the event was observed.
             now = time.time()
+            
+            flash_toggle = lambda elapsed: int(elapsed / self._flash_interval) % 2 == 0
 
             def _should_show(last_time, current_flag):
                 # If currently active, show immediately
@@ -230,7 +232,7 @@ class DrowsinessAnalyzer:
                 # If recently active, flash for the configured duration
                 if last_time and (now - last_time) < self._flash_duration:
                     elapsed = now - last_time
-                    return int(elapsed / self._flash_interval) % 2 == 0
+                    return flash_toggle(elapsed)
                 return False
 
             show_drowsy = _should_show(self._last_drowsy_time, self._is_drowsy)
