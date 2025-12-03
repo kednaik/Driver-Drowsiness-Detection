@@ -137,8 +137,9 @@ def predict_drowsiness(model_path="models/drowsiness_cnn_trained.h5"):
                 # Log the event and let utils save the screenshot
                 try:
                     log_event("Drowsiness Detected", ear=0.0, mar=0.0, frame=frame)
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Logging failure should not interrupt main detection loop
+                    print(f"Failed to log drowsiness event: {e}")
 
             cv2.putText(
                 frame, status, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2
