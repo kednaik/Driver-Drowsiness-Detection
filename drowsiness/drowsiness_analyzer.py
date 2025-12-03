@@ -190,6 +190,7 @@ class DrowsinessAnalyzer:
                             "Yawn Detected", ear, mar, None, log_file=self.log_file
                         )
                     except Exception:
+                        # Suppress all exceptions to ensure detection logic continues even if logging fails.
                         pass
         else:
             self._yawn_counter = 0
