@@ -4,8 +4,10 @@ This module contains utility functions for the drowsiness detection system.
 
 import numpy as np
 from scipy.spatial import distance as dist
-import pygame
 import os
+import subprocess
+import shutil
+import sys
 
 
 def compute_eye_aspect_ratio(eye_points):
@@ -59,18 +61,105 @@ def compute_mouth_aspect_ratio(mouth_points):
     return mar
 
 
-def play_alarm(sound_file="./alarm/alert.mp3"):
+def play_alarm(sound_file="./alarm/alert.wav"):
     """
-    Plays an alarm sound.
+    Play an alarm sound using a platform-safe method.
 
-    Args:
-        sound_file (str): The path to the alarm sound file.
+    Strategy (in order):
+      - On macOS: call `afplay` (non-blocking)
+      - On Windows: try `winsound` for WAV (non-blocking)
+      - On Linux: try `paplay` / `aplay` / `ffplay` (non-blocking where supported)
+      - Fallback: try the `playsound` package (may be blocking)
+      
+    Returns:
+      subprocess.Popen if a non-blocking subprocess player was launched, else None.
     """
+
     if not os.path.exists(sound_file):
         print(
             f"Alarm sound file not found at {sound_file}. Please add an alarm sound file."
         )
-        return
-    pygame.mixer.init()
-    pygame.mixer.music.load(sound_file)
-    pygame.mixer.music.play()
+        return None
+
+    # Helper to launch a subprocess player non-blocking
+    def _try_subprocess(cmd_list):
+        try:
+            proc = subprocess.Popen(
+                cmd_list, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            return proc
+        except Exception:
+            return None
+
+    # macOS: afplay is standard and reliable
+    if sys.platform == "darwin":
+        afplay = shutil.which("afplay")
+        if afplay:
+            return _try_subprocess([afplay, sound_file])
+
+    # Windows: try winsound for WAV (no external process)
+    if sys.platform.startswith("win"):
+        if sound_file.lower().endswith(".wav"):
+            try:
+                import winsound
+
+                winsound.PlaySound(
+                    sound_file, winsound.SND_FILENAME | winsound.SND_ASYNC
+                )
+                return None
+            except Exception:
+                pass
+
+        # fallback to starting the file with the default handler (may be blocking depending on environment)
+        try:
+            return _try_subprocess(["cmd", "/c", "start", "", sound_file])
+        except Exception:
+            pass
+
+    # Linux / misc unix: try common players
+    if sys.platform.startswith("linux") or sys.platform.startswith("freebsd"):
+        for player in ("paplay", "aplay", "ffplay", "ffmpeg", "mpv", "mpg123"):
+            path = shutil.which(player)
+            if not path:
+                continue
+            # ffplay/ffmpeg/mpv need different args to play and exit
+            if player == "ffplay":
+                return _try_subprocess(
+                    [path, "-nodisp", "-autoexit", "-loglevel", "quiet", sound_file]
+                )
+            if player == "ffmpeg":
+                # use ffmpeg to play (requires -nostdin and -hide_banner to be quiet)
+                return _try_subprocess(
+                    [
+                        path,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-i",
+                        sound_file,
+                        "-f",
+                        "null",
+                        "-",
+                    ]
+                )
+            if player in ("mpv", "mpg123", "paplay", "aplay"):
+                return _try_subprocess([path, sound_file])
+
+    # Generic fallback: try playsound (blocking)
+    try:
+        from playsound import playsound
+
+        # playsound may block; run it in a background thread to avoid blocking caller
+        import threading
+
+        t = threading.Thread(target=playsound, args=(sound_file,), daemon=True)
+        t.start()
+        return None
+    except Exception:
+        pass
+
+    # If nothing worked, print a message and return None
+    print(
+        "No available audio player found. Please install 'afplay' (macOS), 'paplay'/'aplay' (Linux), or the 'playsound' package."
+    )
+    return None
