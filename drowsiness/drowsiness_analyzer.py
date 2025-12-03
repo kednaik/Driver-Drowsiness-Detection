@@ -11,6 +11,7 @@ import os
 
 import cv2
 import numpy as np
+from typing import Optional
 
 from drowsiness.face_detector import FaceDetector
 from drowsiness.utils import (
@@ -151,54 +152,66 @@ class DrowsinessAnalyzer:
             cv2.drawContours(frame, [right_eye_hull], -1, (0, 255, 0), 1)
             cv2.drawContours(frame, [mouth_hull], -1, (0, 255, 0), 1)
 
-            # Check for drowsiness
-            if ear < self.ear_threshold:
-                self._ear_counter += 1
-                if (
-                    self._ear_counter >= self.ear_consecutive_frames
-                    and not self._is_drowsy
-                ):
-                    self._is_drowsy = True
-                    # record the time of detection (start flashing)
-                    self._last_drowsy_time = time.time()
-                    play_alarm()
-                    # Save a screenshot of the frame when logging the event
-                    try:
-                        self._log_event("Drowsiness Detected", ear, mar, frame.copy())
-                    except Exception:
-                        # Ensure logging errors don't break processing
-                        self._log_event("Drowsiness Detected", ear, mar, None)
-                    cv2.putText(
-                        frame,
-                        "DROWSINESS ALERT!",
-                        (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7,
-                        (0, 0, 255),
-                        2,
-                    )
-            else:
-                self._ear_counter = 0
-                self._is_drowsy = False
+            # Apply detection/overlay logic (extracted helper)
+            self._apply_detection_logic(ear, mar, frame)
 
-            # Check for yawning
-            if mar > self.mar_threshold:
-                self._yawn_counter += 1
-                if (
-                    self._yawn_counter > 1 and not self._is_yawning
-                ):  # Avoid single-frame flickers
-                    self._is_yawning = True
-                    # record the time of yawn detection (start flashing)
-                    self._last_yawn_time = time.time()
-                    try:
-                        self._log_event("Yawn Detected", ear, mar, frame.copy())
-                    except Exception:
-                        self._log_event("Yawn Detected", ear, mar, None)
-            else:
-                self._yawn_counter = 0
-                self._is_yawning = False
+        return frame, self._is_drowsy, self._is_yawning
 
-            # Display EAR and MAR on the frame
+    def _apply_detection_logic(self, ear: float, mar: float, frame) -> None:
+        """
+        Shared logic that applies EAR/MAR thresholds, updates counters and
+        state, logs events, and draws overlays on the provided frame.
+
+        This is extracted so the same behavior can be used with different
+        landmark providers (dlib or MediaPipe).
+        """
+        # Check for drowsiness
+        if ear is not None and ear < self.ear_threshold:
+            self._ear_counter += 1
+            if self._ear_counter >= self.ear_consecutive_frames and not self._is_drowsy:
+                self._is_drowsy = True
+                # record the time of detection (start flashing)
+                self._last_drowsy_time = time.time()
+                play_alarm()
+                # Save a screenshot of the frame when logging the event
+                try:
+                    self._log_event("Drowsiness Detected", ear, mar, frame.copy())
+                except Exception:
+                    # Ensure logging errors don't break processing
+                    self._log_event("Drowsiness Detected", ear, mar, None)
+                cv2.putText(
+                    frame,
+                    "DROWSINESS ALERT!",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 255),
+                    2,
+                )
+        else:
+            # Reset counter/state when EAR is okay or unavailable
+            self._ear_counter = 0
+            self._is_drowsy = False
+
+        # Check for yawning
+        if mar is not None and mar > self.mar_threshold:
+            self._yawn_counter += 1
+            if (
+                self._yawn_counter > 1 and not self._is_yawning
+            ):  # Avoid single-frame flickers
+                self._is_yawning = True
+                # record the time of yawn detection (start flashing)
+                self._last_yawn_time = time.time()
+                try:
+                    self._log_event("Yawn Detected", ear, mar, frame.copy())
+                except Exception:
+                    self._log_event("Yawn Detected", ear, mar, None)
+        else:
+            self._yawn_counter = 0
+            self._is_yawning = False
+
+        # Display EAR and MAR on the frame if values are available
+        if ear is not None:
             cv2.putText(
                 frame,
                 f"EAR: {ear:.2f}",
@@ -208,6 +221,7 @@ class DrowsinessAnalyzer:
                 (0, 0, 255),
                 2,
             )
+        if mar is not None:
             cv2.putText(
                 frame,
                 f"MAR: {mar:.2f}",
@@ -235,11 +249,60 @@ class DrowsinessAnalyzer:
                     return flash_toggle(elapsed)
                 return False
 
-            show_drowsy = _should_show(self._last_drowsy_time, self._is_drowsy)
-            show_yawning = _should_show(self._last_yawn_time, self._is_yawning)
+        show_drowsy = _should_show(self._last_drowsy_time, self._is_drowsy)
+        show_yawning = _should_show(self._last_yawn_time, self._is_yawning)
 
-            # Draw overlay with explicit show flags
-            self.draw_status_overlay(frame, ear, mar, show_drowsy, show_yawning)
+        # Draw overlay with explicit show flags
+        self.draw_status_overlay(
+            frame,
+            ear if ear is not None else 0.0,
+            mar if mar is not None else 0.0,
+            show_drowsy,
+            show_yawning,
+        )
+
+    def analyze_frame_mediapipe(
+        self,
+        frame,
+        mediapipe_analyzer: Optional[object] = None,
+        draw_landmarks: bool = True,
+    ):
+        """
+        Analyze a frame using a MediaPipe-based analyzer instance.
+
+        Args:
+            frame: BGR image (numpy array) to analyze.
+            mediapipe_analyzer: An instance providing `process_frame(frame, draw_landmarks)` -> (ear, mar).
+                                If None, this function will import and create a temporary `MediapipeAnalyzer`.
+            draw_landmarks: Whether to ask the mediapipe analyzer to draw the face mesh on the frame.
+
+        Returns:
+            (frame, is_drowsy, is_yawning) with overlays applied and internal state updated.
+        """
+        created_local = False
+        if mediapipe_analyzer is None:
+            # Lazy import to avoid adding a hard dependency at module import time
+            try:
+                from drowsiness.mediapipe_analyzer import MediapipeAnalyzer
+
+                mediapipe_analyzer = MediapipeAnalyzer()
+                created_local = True
+            except Exception:
+                # If MediaPipe isn't available, skip detection and return frame unchanged
+                return frame, self._is_drowsy, self._is_yawning
+
+        try:
+            ear, mar = mediapipe_analyzer.process_frame(
+                frame, draw_landmarks=draw_landmarks
+            )
+            # Apply the same downstream logic (counters, overlays, logging)
+            self._apply_detection_logic(ear, mar, frame)
+        finally:
+            if created_local:
+                try:
+                    mediapipe_analyzer.close()
+                except Exception:
+                    pass
 
         return frame, self._is_drowsy, self._is_yawning
 
