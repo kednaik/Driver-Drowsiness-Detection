@@ -156,6 +156,7 @@ class DrowsinessAnalyzer:
                             log_file=self.log_file,
                         )
                     except Exception:
+                        # Suppress all exceptions here to avoid crashing if logging fails.
                         pass
                 cv2.putText(
                     frame,
