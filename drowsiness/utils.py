@@ -8,6 +8,9 @@ import os
 import subprocess
 import shutil
 import sys
+import csv
+import datetime
+import cv2
 
 
 def compute_eye_aspect_ratio(eye_points):
@@ -70,7 +73,7 @@ def play_alarm(sound_file="./alarm/alert.wav"):
       - On Windows: try `winsound` for WAV (non-blocking)
       - On Linux: try `paplay` / `aplay` / `ffplay` (non-blocking where supported)
       - Fallback: try the `playsound` package (may be blocking)
-      
+
     Returns:
       subprocess.Popen if a non-blocking subprocess player was launched, else None.
     """
@@ -163,3 +166,58 @@ def play_alarm(sound_file="./alarm/alert.wav"):
         "No available audio player found. Please install 'afplay' (macOS), 'paplay'/'aplay' (Linux), or the 'playsound' package."
     )
     return None
+
+
+def ensure_log_file(log_file="logs/drowsiness_log.csv"):
+    """Ensure the CSV log file and directory exist with a header.
+
+    Creates `logs/` directory and writes header row if file is missing or empty.
+    """
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    header = ["Timestamp", "Event", "EAR", "MAR", "Screenshot"]
+    try:
+        if not os.path.exists(log_file) or os.path.getsize(log_file) == 0:
+            with open(log_file, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(header)
+    except Exception:
+        # Ignore filesystem errors
+        pass
+
+
+def log_event(event, ear=0.0, mar=0.0, frame=None, log_file="logs/drowsiness_log.csv"):
+    """Log a detection event to CSV and optionally save a screenshot.
+
+    Args:
+        event (str): Human readable event name (e.g., "Drowsiness Detected").
+        ear (float): Eye Aspect Ratio value.
+        mar (float): Mouth Aspect Ratio value.
+        frame (np.ndarray or None): BGR image to save as screenshot (optional).
+        log_file (str): Path to CSV log file.
+    """
+    ensure_log_file(log_file=log_file)
+
+    screenshot_name = ""
+    if frame is not None:
+        try:
+            screenshots_dir = os.path.join(os.path.dirname(log_file), "screenshots")
+            os.makedirs(screenshots_dir, exist_ok=True)
+            ts_fname = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_event = event.replace(" ", "_")
+            screenshot_name = f"{safe_event}_{ts_fname}.png"
+            screenshot_path = os.path.join(screenshots_dir, screenshot_name)
+            # Write BGR image
+            cv2.imwrite(screenshot_path, frame)
+        except Exception:
+            screenshot_name = ""
+
+    try:
+        with open(log_file, "a", newline="") as f:
+            writer = csv.writer(f)
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            writer.writerow(
+                [timestamp, event, f"{ear:.2f}", f"{mar:.2f}", screenshot_name]
+            )
+    except Exception:
+        # Do not let logging errors break detection
+        pass

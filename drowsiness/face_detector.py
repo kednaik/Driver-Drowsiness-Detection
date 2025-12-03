@@ -50,10 +50,3 @@ class FaceDetector:
         faces = self.detector(gray_image)
         landmarks = [self.predictor(gray_image, face) for face in faces]
         return landmarks
-    
-    def __getattr__(self, name):
-        if name == "dlib_module":
-            return dlib
-        elif name in ("get_cv2_landmarks", "cv2_landmarks", "detect"):
-            return self.detect_faces
-        raise AttributeError(f"'FaceDetector' object has no attribute '{name}'")

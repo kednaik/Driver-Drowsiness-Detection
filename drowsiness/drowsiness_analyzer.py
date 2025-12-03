@@ -3,10 +3,7 @@ This module contains the DrowsinessAnalyzer class, which is responsible for
 analyzing facial landmarks to detect drowsiness.
 """
 
-import csv
-import datetime
 import time
-from collections import deque
 import os
 
 import cv2
@@ -18,6 +15,8 @@ from drowsiness.utils import (
     compute_eye_aspect_ratio,
     compute_mouth_aspect_ratio,
     play_alarm,
+    ensure_log_file,
+    log_event,
 )
 
 
@@ -69,48 +68,13 @@ class DrowsinessAnalyzer:
         # Flashing configuration: total duration and individual flash interval
         self._flash_duration = 1.0  # seconds to keep flashing after detection
         self._flash_interval = 0.2  # seconds per flash toggle
-        self._init_log_file()
+        # Ensure log file exists with header
+        try:
+            ensure_log_file(self.log_file)
+        except Exception:
+            pass
 
-    def _init_log_file(self):
-        """Initializes the log file with headers if it doesn't exist."""
-        with open(self.log_file, "a", newline="") as file:
-            writer = csv.writer(file)
-            if file.tell() == 0:
-                writer.writerow(["Timestamp", "Event", "EAR", "MAR", "Screenshot"])
-
-    def _log_event(self, event, ear, mar, frame=None):
-        """
-        Logs a drowsiness or yawn event to the CSV file.
-
-        Args:
-            event (str): The type of event ('Drowsiness' or 'Yawn').
-            ear (float): The current eye aspect ratio.
-            mar (float): The current mouth aspect ratio.
-        """
-        # Timestamp for human-readable CSV and filesystem-safe filename
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ts_fname = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Save screenshot if a frame was provided
-        if frame is not None:
-            screenshots_dir = os.path.join(
-                os.path.dirname(self.log_file), "screenshots"
-            )
-            try:
-                os.makedirs(screenshots_dir, exist_ok=True)
-                # Filename: <event>_YYYYmmdd_HHMMSS.png
-                safe_event = event.replace(" ", "_")
-                img_name = f"{safe_event}_{ts_fname}.png"
-                img_path = os.path.join(screenshots_dir, img_name)
-                # Write the BGR frame as PNG
-                cv2.imwrite(img_path, frame)
-            except Exception:
-                # Don't let screenshot saving break detection; ignore filesystem errors
-                pass
-
-        with open(self.log_file, "a", newline="") as file:
-            writer = csv.writer(file)
-            writer.writerow([timestamp, event, f"{ear:.2f}", f"{mar:.2f}"])
+    # logging handled by shared helpers in drowsiness.utils
 
     def analyze_frame(self, frame):
         """
@@ -123,7 +87,7 @@ class DrowsinessAnalyzer:
             A tuple containing the frame with annotations, and the drowsiness/yawn status.
         """
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        landmarks_list = self.face_detector.get_cv2_landmarks(gray)
+        landmarks_list = self.face_detector.detect_faces(gray)
 
         ear, mar = 0.0, 0.0  # Default values
 
@@ -173,12 +137,26 @@ class DrowsinessAnalyzer:
                 # record the time of detection (start flashing)
                 self._last_drowsy_time = time.time()
                 play_alarm()
-                # Save a screenshot of the frame when logging the event
+                # Save a screenshot of the frame when logging the event using shared util
                 try:
-                    self._log_event("Drowsiness Detected", ear, mar, frame.copy())
+                    log_event(
+                        "Drowsiness Detected",
+                        ear,
+                        mar,
+                        frame.copy(),
+                        log_file=self.log_file,
+                    )
                 except Exception:
-                    # Ensure logging errors don't break processing
-                    self._log_event("Drowsiness Detected", ear, mar, None)
+                    try:
+                        log_event(
+                            "Drowsiness Detected",
+                            ear,
+                            mar,
+                            None,
+                            log_file=self.log_file,
+                        )
+                    except Exception:
+                        pass
                 cv2.putText(
                     frame,
                     "DROWSINESS ALERT!",
@@ -203,9 +181,16 @@ class DrowsinessAnalyzer:
                 # record the time of yawn detection (start flashing)
                 self._last_yawn_time = time.time()
                 try:
-                    self._log_event("Yawn Detected", ear, mar, frame.copy())
+                    log_event(
+                        "Yawn Detected", ear, mar, frame.copy(), log_file=self.log_file
+                    )
                 except Exception:
-                    self._log_event("Yawn Detected", ear, mar, None)
+                    try:
+                        log_event(
+                            "Yawn Detected", ear, mar, None, log_file=self.log_file
+                        )
+                    except Exception:
+                        pass
         else:
             self._yawn_counter = 0
             self._is_yawning = False
@@ -232,22 +217,20 @@ class DrowsinessAnalyzer:
                 2,
             )
 
-            # Determine whether to show/flash overlays for a short time after
-            # detection. This allows a one-second flashing notification after
-            # the event was observed.
-            now = time.time()
-            
-            flash_toggle = lambda elapsed: int(elapsed / self._flash_interval) % 2 == 0
+        # Determine whether to show/flash overlays for a short time after
+        # detection. This allows a short flashing notification after the event
+        # was observed.
+        now = time.time()
 
-            def _should_show(last_time, current_flag):
-                # If currently active, show immediately
-                if current_flag:
-                    return True
-                # If recently active, flash for the configured duration
-                if last_time and (now - last_time) < self._flash_duration:
-                    elapsed = now - last_time
-                    return flash_toggle(elapsed)
-                return False
+        def _should_show(last_time, current_flag):
+            # If currently active, show immediately
+            if current_flag:
+                return True
+            # If recently active, flash for the configured duration
+            if last_time and (now - last_time) < self._flash_duration:
+                elapsed = now - last_time
+                return int(elapsed / self._flash_interval) % 2 == 0
+            return False
 
         show_drowsy = _should_show(self._last_drowsy_time, self._is_drowsy)
         show_yawning = _should_show(self._last_yawn_time, self._is_yawning)
@@ -377,34 +360,6 @@ class DrowsinessAnalyzer:
             f"EAR_Frames={self.ear_consecutive_frames}, "
             f"MAR_Threshold={self.mar_threshold})"
         )
-
-    def __getattr__(self, name):
-        """
-        Provides access to FaceDetector attributes if not found in DrowsinessAnalyzer.
-
-        Args:
-            name (str): The attribute name.
-        Returns:
-            The attribute from FaceDetector if it exists.
-        Raises:
-            AttributeError: If the attribute is not found in both classes.
-        """
-        if name == "analyze":
-            return self.analyze_frame
-        elif name == "ear_thres":
-            return self.ear_threshold
-        elif name == "mar_thres":
-            return self.mar_threshold
-
-        if name in ("get_cv2_landmarks", "cv2_landmarks"):
-            return self.face_detector.get_cv2_landmarks
-
-        # Fallback: try to forward any unknown attribute to the
-        # underlying FaceDetector instance (composition/forwarding).
-        if hasattr(self.face_detector, name):
-            return getattr(self.face_detector, name)
-
-        raise AttributeError(f"'DrowsinessAnalyzer' object has no attribute '{name}'")
 
 
 if __name__ == "__main__":
