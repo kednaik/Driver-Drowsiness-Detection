@@ -5,4 +5,6 @@ scipy
 pytest
 matplotlib
 mediapipe
-
+kagglehub
+scikit-learn
+tensorflow

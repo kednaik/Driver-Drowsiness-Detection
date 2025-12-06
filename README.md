@@ -50,55 +50,148 @@ aai-551-project-v1/
     cd aai-551-project-v1
     ```
 
-2.  **Create a virtual environment and activate it:**
+2.  **Create and activate a virtual environment (recommended):**
+
+    It's strongly recommended to run the project inside a Python virtual environment to avoid dependency conflicts.
+
+    Option A — quick setup script (macOS/Linux `zsh`):
     ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
+    # Create venv and install requirements
+    bash scripts/setup_venv.sh
+    # Activate the venv afterwards
+    source .venv/bin/activate
     ```
 
-3.  **Install the required packages:**
+    Option B — manual steps:
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate  # on macOS / Linux (zsh)
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+    Once the venv is activated, run Python scripts normally (they'll use the venv's interpreter).
+
+    If you don't want to use a virtual environment, you can still install dependencies globally with:
     ```bash
     pip install -r requirements.txt
     ```
 
-4.  **Download the shape predictor model:**
-    Download the `shape_predictor_68_face_landmarks.dat` file from [dlib's website](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2).
-    Extract the file and place it in the `models/` directory.
+3.  **Download the dlib shape predictor model:**
+    - Download `shape_predictor_68_face_landmarks.dat.bz2` from [http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2).
+    - Extract the file and place `shape_predictor_68_face_landmarks.dat` in the `models/` directory.
 
-5.  **Add an alarm sound:**
-    Place an alarm sound file (e.g., `alarm.wav`) in the `alarm/` directory.
+4.  **Add an alarm sound:**
+    - Place a `.wav` file named `alarm.wav` in the `alarm/` directory.
 
-## How to Run
+## Usage
 
-1.  **Run the Jupyter Notebook:**
-    Start Jupyter Lab or Jupyter Notebook:
+### Method 1: Facial Landmarks (dlib)
+
+Run the `main.ipynb` notebook to start the drowsiness detection system using facial landmarks.
+
+### Method 2: CNN Model
+
+This method uses a Convolutional Neural Network (CNN) trained on the Drowsiness Dataset.
+
+1.  **Download the Dataset:**
+    - Download the dataset from Kaggle: [Drowsiness Dataset](https://www.kaggle.com/datasets/dheerajperumandla/drowsiness-dataset/data).
+    - Extract the dataset into `data/drowsiness`. The structure should be:
+        ```
+        data/drowsiness/
+        ├── Closed/
+        ├── Open/
+        ├── yawn/
+        └── no_yawn/
+        ```
+
+2.  **Train the Model:**
+    Run the training script to train the CNN model.
     ```bash
-    jupyter lab
+    # Use the trainer class to run training from Python or run the module if supported.
+    # Programmatic usage (recommended):
+    #
+    # ```python
+    # from drowsiness.cnn_trainer import CNNTrainer
+    # trainer = CNNTrainer()
+    # trainer.train(epochs=50, batch_size=32)
+    # ```
+    #
+    # If you prefer a module entrypoint and it's available, you can run:
+    python -m drowsiness.cnn_trainer
     ```
-    Open `main.ipynb` and run the cells.
+    This will save the trained model to `models/drowsiness_cnn.h5` and a training history plot.
 
-2.  **Using the system:**
-    -   A window will open showing your webcam feed.
-    -   The system will draw contours around your eyes and mouth.
-    -   The current EAR and MAR values will be displayed on the screen.
-    -   If the system detects drowsiness, it will display a "DROWSINESS ALERT!" message and play an alarm sound.
-    -   A top-centered status overlay shows `DROWSY` and/or `YAWNING`. The overlay will flash for 1 second after an event is detected to draw attention; the flash duration and interval are configurable in the analyzer implementation.
-    -   Press the 'q' key to stop the program.
+3.  **Run Real-time Prediction:**
+    Run the prediction script to use the trained model with your webcam.
+    ```bash
+    python -m drowsiness.predict_cnn
+    ```
 
-## Running Tests
+    should be updated to:
 
-To run the tests, use `pytest`:
+    ```bash
+    python -m drowsiness.cnn_trainer
+    ```
+
+### Preprocessing for Yawn Detection
+
+To improve the accuracy of yawn detection, the system preprocesses the input images (both for training and real-time prediction) by focusing on the mouth region:
+
+1.  **Face Detection:** The system first detects the face using OpenCV's `haarcascade_frontalface_default.xml`.
+2.  **Mouth Cropping:**
+    - It attempts to detect the mouth within the lower half of the face using `haarcascade_smile.xml`.
+    - If a smile/mouth is detected, it crops that specific region.
+    - If no specific mouth region is detected (which can happen with wide yawns), it falls back to cropping the entire lower half of the face.
+3.  **Resizing:** The cropped mouth image is then resized to 145x145 pixels before being fed into the CNN model.
+
+This ensures that the model learns features specific to the mouth shape (open vs. closed) rather than irrelevant facial features.
+
+## Testing
+Run the test suite with `pytest`. Recommended workflow when using the project's virtual environment:
+
 ```bash
+# activate the venv (macOS / Linux zsh)
+source .venv/bin/activate
+
+# (optional) ensure dev/test dependencies are installed
+pip install -r requirements.txt
+
+# run the full test suite
 pytest
+
+# run tests with more output (verbose)
+pytest -q
+
+# run a single test file
+pytest tests/test_utils_logging.py
+
+# run a single test function
+pytest tests/test_utils_logging.py::test_log_event
 ```
 
-## Dependencies
+Notes:
+- If you created the virtual environment using `scripts/setup_venv.sh`, activate it with `source .venv/bin/activate` before running tests.
+- On macOS with Apple Silicon you may need to install platform-specific packages (for example `tensorflow-macos` / `tensorflow-metal`) in the venv before running model-related tests.
+- If a test requires hardware (webcam) or audio output, run it manually while the venv is active.
 
--   OpenCV
--   dlib
--   NumPy
--   SciPy
--   Pygame
--   pytest
+Running tests via helper script
 
-See `requirements.txt` for specific versions.
+We provide a small helper script to make running the test suite convenient. The script will activate the project's `.venv` (if present), add the project root to `PYTHONPATH`, and run `pytest`.
+
+Usage:
+```bash
+# run default (quiet) test run
+bash scripts/run_tests.sh
+
+# pass pytest args through (verbose)
+bash scripts/run_tests.sh -q
+
+# make it executable then run
+chmod +x scripts/run_tests.sh
+./scripts/run_tests.sh
+```
+
+Notes:
+- The script is a convenience wrapper; you can still activate the venv yourself and run `pytest` directly if you prefer.
+- The script sets `PYTHONPATH` so tests can import `drowsiness` from the project root.
