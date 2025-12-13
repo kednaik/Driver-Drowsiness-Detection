@@ -2,6 +2,36 @@
 
 This project is a real-time driver drowsiness detection system that uses computer vision to prevent accidents caused by driver fatigue. It analyzes a driver's facial landmarks from a webcam feed to detect signs of drowsiness, such as closed eyes and yawning, and issues an alert.
 
+## Running the Streamlit app with the project's `.venv`
+
+If you created a virtual environment at `.venv`, run Streamlit using the venv Python so Streamlit uses the same packages:
+
+1. Create and install (if you haven't already):
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+2. Start the Streamlit app (two options):
+
+- Using the helper script (recommended):
+
+```bash
+./scripts/run_streamlit_venv.sh
+```
+
+- Or directly with the venv Python (no activation required):
+
+```bash
+.venv/bin/python -m streamlit run app.py
+```
+
+3. In VS Code, you can point the workspace interpreter to the venv. The workspace settings file `.vscode/settings.json` is already configured to use `.venv/bin/python` if present.
+
+If Streamlit still starts with the wrong Python, ensure you invoked the command with the `.venv` Python above, or configure your editor/IDE to use the `.venv` interpreter.
+
+
 ## Features
 
 - **Real-time Drowsiness Detection:** Monitors the driver's face using a webcam.
@@ -125,7 +155,7 @@ This method uses a Convolutional Neural Network (CNN) trained on the Drowsiness 
 3.  **Run Real-time Prediction:**
     Run the prediction script to use the trained model with your webcam.
     ```bash
-    python -m drowsiness.predict_cnn
+    python -m drowsiness.cnn_analyzer
     ```
 
     should be updated to:
