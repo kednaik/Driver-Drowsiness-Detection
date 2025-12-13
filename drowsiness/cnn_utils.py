@@ -4,7 +4,6 @@ import numpy as np
 import kagglehub
 import shutil
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from drowsiness.face_detector import FaceDetector
 
 
 def download_dataset():
