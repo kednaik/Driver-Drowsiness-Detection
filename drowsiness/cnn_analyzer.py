@@ -9,17 +9,6 @@ from drowsiness.cnn_utils import get_haarcascade_path, get_mouth_from_face_image
 from drowsiness.utils import play_alarm, log_event
 
 
-import cv2
-import numpy as np
-import os
-import csv
-import time
-import datetime
-from tensorflow.keras.models import load_model
-from drowsiness.cnn_utils import get_haarcascade_path, get_mouth_from_face_image
-from drowsiness.utils import play_alarm, log_event
-
-
 class CNNDrowsinessDetector:
     def __init__(self, model_path="models/drowsiness_cnn.h5"):
         self.model_path = model_path
