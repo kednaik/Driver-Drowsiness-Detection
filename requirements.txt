@@ -8,3 +8,5 @@ mediapipe
 kagglehub
 scikit-learn
 tensorflow
+streamlit
+tensorflow
