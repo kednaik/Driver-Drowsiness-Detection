@@ -87,7 +87,7 @@ class DrowsinessAnalyzer:
             A tuple containing the frame with annotations, and the drowsiness/yawn status.
         """
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        landmarks_list = self.face_detector.detect_faces(gray)
+        landmarks_list = self.face_detector.get_cv2_landmarks(gray)
 
         ear, mar = 0.0, 0.0  # Default values
 
@@ -362,6 +362,35 @@ class DrowsinessAnalyzer:
             f"EAR_Frames={self.ear_consecutive_frames}, "
             f"MAR_Threshold={self.mar_threshold})"
         )
+    
+
+    def __getattr__(self, name):
+        """
+        Provides access to FaceDetector attributes if not found in DrowsinessAnalyzer.
+
+        Args:
+            name (str): The attribute name.
+        Returns:
+            The attribute from FaceDetector if it exists.
+        Raises:
+            AttributeError: If the attribute is not found in both classes.
+        """
+        if name == "analyze":
+            return self.analyze_frame
+        elif name == "ear_thres":
+            return self.ear_threshold
+        elif name == "mar_thres":
+            return self.mar_threshold
+
+        if name in ("get_cv2_landmarks", "cv2_landmarks"):
+            return self.face_detector.get_cv2_landmarks
+
+        # Fallback: try to forward any unknown attribute to the
+        # underlying FaceDetector instance (composition/forwarding).
+        if hasattr(self.face_detector, name):
+            return getattr(self.face_detector, name)
+
+        raise AttributeError(f"'DrowsinessAnalyzer' object has no attribute '{name}'")
 
 
 if __name__ == "__main__":

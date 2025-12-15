@@ -221,3 +221,129 @@ def log_event(event, ear=0.0, mar=0.0, frame=None, log_file="logs/drowsiness_log
     except Exception:
         # Do not let logging errors break detection
         pass
+
+
+def cleanup_video_resources(cap=None, window_names=None, analyzers=None):
+    """
+    Cleanup helper to release webcam, close windows, and free analyzer resources.
+
+    Used to safely shutdown video capture in notebook cells and scripts.
+
+    Args:
+        cap (cv2.VideoCapture or None): Webcam capture object to release.
+        window_names (list of str or None): Window names to close.
+        analyzers (list or None): Analyzer objects with optional .close() method.
+    """
+    import time
+
+    # Release the webcam
+    if cap is not None and cap.isOpened():
+        cap.release()
+
+    # Close specified windows
+    if window_names:
+        for window_name in window_names:
+            try:
+                cv2.destroyWindow(window_name)
+            except Exception:
+                pass
+
+    # Destroy all windows and process GUI events
+    try:
+        cv2.waitKey(1)
+    except Exception:
+        pass
+    cv2.destroyAllWindows()
+
+    # Close analyzers if they have a close() method
+    if analyzers:
+        for analyzer in analyzers:
+            try:
+                if hasattr(analyzer, "close"):
+                    analyzer.close()
+            except Exception:
+                pass
+
+    # Small pause helps the OS close windows reliably
+    time.sleep(0.1)
+
+
+def run_drowsiness_detection_loop(
+    analyzer,
+    window_name="Drowsiness Detection",
+    mediapipe_analyzer=None,
+    use_mediapipe=False,
+    flip_frame=True,
+):
+    """
+    Run a real-time drowsiness detection loop from webcam.
+
+    This function encapsulates the common webcam video loop logic for all detection modes.
+    Handles camera initialization, frame processing, display, and cleanup.
+
+    Args:
+        analyzer (DrowsinessAnalyzer): The drowsiness analyzer instance.
+        window_name (str): Name of the display window.
+        mediapipe_analyzer (MediapipeAnalyzer or None): Optional MediaPipe analyzer for alternate detection.
+        use_mediapipe (bool): If True, use analyze_frame_mediapipe; else use analyze_frame.
+        flip_frame (bool): If True, flip frame horizontally (mirror effect).
+
+    Returns:
+        None. Runs until user presses 'q' or ESC, or camera fails.
+    """
+    import time
+
+    cap = None
+    try:
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            raise IOError(
+                "Cannot open webcam. Please check if the webcam is connected and drivers are installed."
+            )
+
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        try:
+            cv2.resizeWindow(window_name, 1024, 768)
+        except Exception:
+            pass
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Failed to grab frame. Exiting...")
+                break
+
+            # Mirror frame if requested
+            if flip_frame:
+                frame = cv2.flip(frame, 1)
+
+            # Analyze frame using selected method
+            if use_mediapipe and mediapipe_analyzer is not None:
+                frame, is_drowsy, is_yawning = analyzer.analyze_frame_mediapipe(
+                    frame, mediapipe_analyzer, draw_landmarks=True
+                )
+            else:
+                frame, is_drowsy, is_yawning = analyzer.analyze_frame(frame)
+
+            # Display the frame
+            cv2.imshow(window_name, frame)
+
+            # Break on 'q' or ESC
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q") or key == 27:
+                break
+
+    except (IOError, cv2.error) as e:
+        print(f"An error occurred: {e}")
+    except FileNotFoundError as e:
+        print(f"A required file was not found: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        analyzers_to_close = [analyzer]
+        if mediapipe_analyzer is not None:
+            analyzers_to_close.append(mediapipe_analyzer)
+        cleanup_video_resources(
+            cap=cap, window_names=[window_name], analyzers=analyzers_to_close
+        )

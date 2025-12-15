@@ -159,6 +159,11 @@ class CNNDrowsinessDetector:
             )
 
         return frame, self.is_drowsy, frame_is_yawning
+    
+    def __getattr__(self, name):
+        if name == 'analyze_frame':
+            return self.predict_frame
+        raise AttributeError(f"'CNNDrowsinessDetector' object has no attribute '{name}'")
 
 
 def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):

@@ -170,6 +170,11 @@ class CNNDrowsinessDetector:
             )
 
         return frame, self.is_drowsy, frame_is_yawning
+    
+    def __getattr__(self, name):
+        if name == 'analyze_frame':
+            return self.predict_frame
+        raise AttributeError(f"'CNNDrowsinessDetector' object has no attribute '{name}'")
 
 
 def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):
@@ -178,29 +183,59 @@ def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):
     if detector.model is None:
         return
 
-    cap = cv2.VideoCapture(0)
+    try:
+        cap = cv2.VideoCapture(0)
 
-    if not cap.isOpened():
-        print("Cannot open camera")
-        return
+        if not cap.isOpened():
+            print("Cannot open camera")
+            return
 
-    print("Starting video stream. Press 'q' to quit.")
+        print("Starting video stream. Press 'q' to quit.")
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Can't receive frame (stream end?). Exiting ...")
-            break
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("Can't receive frame (stream end?). Exiting ...")
+                break
 
-        frame, is_drowsy, is_yawning = detector.predict_frame(frame)
+            frame, is_drowsy, is_yawning = detector.predict_frame(frame)
 
-        cv2.imshow("Drowsiness Detection", frame)
+            cv2.imshow("Drowsiness Detection", frame)
 
-        if cv2.waitKey(1) == ord("q"):
-            break
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or key == 27:  # 27 = ESC
+                break
 
-    cap.release()
-    cv2.destroyAllWindows()
+
+    except (IOError, cv2.error) as e:
+        print(f"An error occurred: {e}")
+    except FileNotFoundError as e:
+        print(f"A required file was not found: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+    finally:
+        # Release the webcam and destroy all windows
+        if 'cap' in locals() and cap.isOpened():
+            cap.release()
+
+        # Destroy the named window explicitly
+        try:
+            cv2.destroyWindow(window_name)
+        except Exception:
+            pass
+
+        # Destroy all windows and give the OS a moment to process the close event
+        cv2.destroyAllWindows()
+        # ensure the GUI event queue is processed
+        try:
+            cv2.waitKey(1)
+        except Exception:
+            pass
+        # small pause helps the OS close the window reliably
+        time.sleep(0.1)
+
+        print("Webcam released and windows closed.")
 
 
 if __name__ == "__main__":
