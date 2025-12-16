@@ -40,6 +40,10 @@ If Streamlit still starts with the wrong Python, ensure you invoked the command 
 - **Audible Alerts:** Plays an alarm sound when drowsiness is detected.
 - **Event Logging:** Logs all drowsiness and yawn events to a CSV file for later analysis.
 
+## Bonus: Streamlit Demo
+
+As an additional feature (bonus), this repository includes a Streamlit web app that demonstrates all three drowsiness detection approaches (dlib landmarks, MediaPipe Face Mesh, and the CNN classifier). The app provides a simple UI to switch between detection modes, view live webcam output, and inspect logged events.
+
 ## How It Works
 
 The system uses the `dlib` library to detect facial landmarks and `OpenCV` to process video frames. It calculates the Eye Aspect Ratio (EAR) to determine if the eyes are closed. If the EAR falls below a certain threshold for a specified number of consecutive frames, the system concludes that the driver is drowsy and plays an alarm. It also monitors the Mouth Aspect Ratio (MAR) to detect yawns, which are also logged as potential signs of fatigue.

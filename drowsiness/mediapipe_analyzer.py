@@ -224,3 +224,25 @@ class MediapipeAnalyzer:
                     mar = None
 
         return ear, mar
+ 
+    def __getattr__(self, name):
+        """
+        Provide a few compatibility aliases and forward unknown attribute lookups
+        to the underlying MediaPipe `face_mesh` object when appropriate.
+ 
+        Common aliases provided:
+        - `analyze`, `analyze_frame`, `process` -> `process_frame`
+ 
+        If the attribute exists on the internal `face_mesh`, it will be
+        returned. Otherwise an AttributeError is raised.
+        """
+        # Provide simple aliases to match the DrowsinessAnalyzer API
+        if name in ("analyze", "analyze_frame", "process"):
+            return self.process_frame
+ 
+        # Forward unknown attributes to the underlying MediaPipe FaceMesh
+        if hasattr(self, "face_mesh") and hasattr(self.face_mesh, name):
+            return getattr(self.face_mesh, name)
+ 
+        raise AttributeError(f"'MediapipeAnalyzer' object has no attribute '{name}'")
+ 
