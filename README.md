@@ -20,6 +20,38 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+On Debian/Ubuntu systems you may also need to install system build dependencies
+before installing some Python packages (for example `dlib`, `mediapipe`, or
+packages that compile native extensions). Run:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential cmake python3-dev libgtk-3-dev libboost-all-dev pkg-config
+```
+
+**Easy setup (preferred)**
+
+- **Use the repository helper script**: The project includes a helper script that creates a virtual environment, activates it, and installs `requirements.txt`. It also supports an optional system-deps step for Debian/Ubuntu systems.
+
+- Run the script (recommended):
+
+```bash
+# install system deps first (requires sudo) and then create venv + install Python deps
+bash ./scripts/setup_venv.sh --system-deps
+
+# Or set the environment variable instead of passing the flag
+INSTALL_SYSTEM_DEPS=true bash ./scripts/setup_venv.sh
+
+# If you only want to create the venv and install Python requirements (no system deps):
+bash ./scripts/setup_venv.sh
+```
+
+- After the script finishes, activate the venv and ensure your editor / notebook uses the same interpreter:
+
+```bash
+source .venv/bin/activate
+# In Jupyter / VS Code pick the kernel/interpreter: .venv/bin/python
+```
 
 Notes:
 

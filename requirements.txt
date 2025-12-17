@@ -4,11 +4,12 @@ numpy
 scipy
 pytest
 matplotlib
-mediapipe
+mediapipe==0.10.14
 kagglehub
 scikit-learn
 tensorflow
 streamlit
 tensorflow
-playsound
+playsound==1.2.2
 Pillow
+ipykernel
