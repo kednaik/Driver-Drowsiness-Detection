@@ -22,9 +22,8 @@ pip install -r requirements.txt
 ```
 
 Notes:
-- Use Python 3.8+ where possible.
-- If you prefer a helper script, run `bash ./scripts/setup_venv.sh`.
-- In VS Code, point the workspace interpreter to `.venv/bin/python` so the notebook kernel uses the same environment.
+
+After activating the virtual environment, open `main.ipynb` in Jupyter or VS Code, select the `.venv` kernel / interpreter (`.venv/bin/python`), and run the notebook cells to run the demo sections (Dlib, MediaPipe, CNN). When running cell first time if prompted install
 
 ## Features
 

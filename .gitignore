@@ -26,9 +26,6 @@ logs/
 # PyCharm
 .idea/
 
-# dlib / model files (large binary data)
-models/shape_predictor_68_face_landmarks.dat
-models/*.bz2
 
 # Audio files (if you want them out of repo during development)
 alarm/*.wav
