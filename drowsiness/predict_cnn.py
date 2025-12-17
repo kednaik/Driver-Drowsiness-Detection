@@ -1,13 +1,11 @@
-import cv2
-import numpy as np
-import os
-import csv
-import time
-import datetime
-from tensorflow.keras.models import load_model
-from drowsiness.cnn_utils import get_haarcascade_path, get_mouth_from_face_image
-from drowsiness.utils import play_alarm, log_event
+"""
+CNN-based drowsiness predictor utilities.
 
+This module exposes `CNNDrowsinessDetector`, a lightweight wrapper that
+loads a Keras model and applies it to face / mouth crops to detect
+yawning and eye closure. The convenience function `predict_drowsiness`
+runs a webcam loop using the detector.
+"""
 
 import cv2
 import numpy as np
@@ -21,7 +19,15 @@ from drowsiness.utils import play_alarm, log_event
 
 
 class CNNDrowsinessDetector:
-    def __init__(self, model_path="models/drowsiness_cnn.h5"):
+    def __init__(self, model_path="models/drowsiness_cnn_trained.h5"):
+        """
+        Initialize the CNN drowsiness detector.
+
+        Parameters
+        ----------
+        model_path : str
+            Path to a Keras `.h5` model used for predicting yawn/eye states.
+        """
         self.model_path = model_path
         self.model = None
         self.face_cascade = None
@@ -36,6 +42,13 @@ class CNNDrowsinessDetector:
         self.load_resources()
 
     def load_resources(self):
+        """
+        Load model and Haar cascades required for face/eye detection.
+
+        - Loads the Keras model from `self.model_path` when present.
+        - Initializes `self.face_cascade` and `self.eye_cascade` using
+          OpenCV Haar cascade files.
+        """
         if os.path.exists(self.model_path):
             print(f"Loading model from {self.model_path}...")
             self.model = load_model(self.model_path)
@@ -51,6 +64,30 @@ class CNNDrowsinessDetector:
         self.eye_cascade = cv2.CascadeClassifier(eye_cas_path)
 
     def predict_frame(self, frame):
+        """
+        Predict drowsiness/yawn on a single BGR frame.
+
+        The method performs the following steps for each detected face:
+        - crop the face and attempt mouth extraction for yawn prediction using
+          the loaded CNN model;
+        - detect eyes using a Haar cascade and (optionally) run the CNN on
+          eye crops to determine closed eyes;
+        - update an internal consecutive-eye-closure counter to set
+          transient drowsiness state and optionally play an alarm and log
+          the event using `drowsiness.utils`.
+
+        Parameters
+        ----------
+        frame : numpy.ndarray
+            BGR image as produced by OpenCV camera capture.
+
+        Returns
+        -------
+        (frame, is_drowsy, is_yawning)
+            `frame` is the annotated BGR image. `is_drowsy` is the
+            detector's persistent drowsiness state, and `is_yawning` is a
+            boolean indicating whether this frame contained a yawn.
+        """
         if self.model is None:
             cv2.putText(
                 frame,
@@ -170,14 +207,30 @@ class CNNDrowsinessDetector:
             )
 
         return frame, self.is_drowsy, frame_is_yawning
-    
+
     def __getattr__(self, name):
-        if name == 'analyze_frame':
+        """
+        Provide a small compatibility alias map for external callers.
+
+        Currently maps `analyze_frame` to `predict_frame` so the detector can
+        be used interchangeably with other analyzer implementations.
+        """
+        if name == "analyze_frame":
             return self.predict_frame
-        raise AttributeError(f"'CNNDrowsinessDetector' object has no attribute '{name}'")
+        raise AttributeError(
+            f"'CNNDrowsinessDetector' object has no attribute '{name}'"
+        )
 
 
-def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):
+def predict_drowsiness(model_path="models/drowsiness_cnn_trained.h5"):
+    """
+    Start a webcam loop and run the CNN drowsiness detector live.
+
+    Parameters
+    ----------
+    model_path : str
+        Path to the Keras model to load for predictions.
+    """
     detector = CNNDrowsinessDetector(model_path)
 
     if detector.model is None:
@@ -203,9 +256,8 @@ def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):
             cv2.imshow("Drowsiness Detection", frame)
 
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:  # 27 = ESC
+            if key == ord("q") or key == 27:  # 27 = ESC
                 break
-
 
     except (IOError, cv2.error) as e:
         print(f"An error occurred: {e}")
@@ -216,7 +268,7 @@ def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):
 
     finally:
         # Release the webcam and destroy all windows
-        if 'cap' in locals() and cap.isOpened():
+        if "cap" in locals() and cap.isOpened():
             cap.release()
 
         # Destroy the named window explicitly

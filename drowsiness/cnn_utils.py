@@ -7,6 +7,14 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 
 def download_dataset():
+    """
+    Download the Drowsiness dataset from Kaggle using `kagglehub`.
+
+    The function attempts to locate the expected class folders
+    (`Closed`, `Open`, `yawn`, `no_yawn`) inside the downloaded archive
+    and copies them into `data/drowsiness/` if found. Returns the target
+    directory path.
+    """
     print("Downloading dataset from Kaggle...")
     path = kagglehub.dataset_download("dheerajperumandla/drowsiness-dataset")
     print("Path to dataset files:", path)
@@ -52,6 +60,12 @@ def download_dataset():
 
 
 def get_haarcascade_path():
+    """
+    Return a filesystem path to a Haar cascade for frontal face detection.
+
+    Prefers OpenCV's packaged cascade (`cv2.data.haarcascades`) and falls
+    back to `models/haarcascade_frontalface_default.xml` if not present.
+    """
     # Use opencv's built-in haarcascade if available, otherwise expect it in models folder
     path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     if not os.path.exists(path):
@@ -61,6 +75,12 @@ def get_haarcascade_path():
 
 
 def get_smile_cascade_path():
+    """
+    Return a filesystem path to OpenCV's `haarcascade_smile.xml` cascade.
+
+    Falls back to `models/haarcascade_smile.xml` when the OpenCV data file
+    is unavailable.
+    """
     path = cv2.data.haarcascades + "haarcascade_smile.xml"
     if not os.path.exists(path):
         path = os.path.join("models", "haarcascade_smile.xml")
@@ -109,8 +129,26 @@ def get_mouth_from_face_image(face_image):
 
 def crop_mouth_from_face(image_array, face_cas_path=None):
     """
-    Detects face using Haar Cascade, then attempts to detect and crop the mouth.
-    If mouth detection fails, falls back to the lower half of the face.
+    Detect and crop the mouth region from a full-color image.
+
+    Workflow:
+    - Detect faces using a Haar cascade (frontal face). If no faces are
+      detected, returns None.
+    - Uses the largest detected face, extracts the face ROI and calls
+      `get_mouth_from_face_image` to extract the mouth region.
+
+    Parameters
+    ----------
+    image_array : numpy.ndarray
+        BGR image read with OpenCV.
+    face_cas_path : str or None
+        Optional path to a Haar cascade for face detection. When None,
+        `get_haarcascade_path()` is used.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        Cropped mouth image (BGR) or None when face detection fails.
     """
     if face_cas_path is None:
         face_cas_path = get_haarcascade_path()
@@ -133,6 +171,14 @@ def crop_mouth_from_face(image_array, face_cas_path=None):
 
 
 def face_for_yawn(direc="data/drowsiness", face_cas_path=None):
+    """
+    Prepare mouth-cropped training examples for the yawn/no_yawn classes.
+
+    Scans `direc/yawn` and `direc/no_yawn`, crops mouth regions using
+    `crop_mouth_from_face`, resizes them to the model input size and
+    returns a list of [image_array, class_index] pairs suitable for
+    training/validation.
+    """
     if face_cas_path is None:
         face_cas_path = get_haarcascade_path()
 
@@ -166,6 +212,13 @@ def face_for_yawn(direc="data/drowsiness", face_cas_path=None):
 
 
 def get_data(dir_path="data/drowsiness"):
+    """
+    Load images for the `Closed` and `Open` classes and return them as
+    [image_array, class_index] pairs.
+
+    The returned class indices are offset to match the overall label
+    ordering used in the project (0: yawn, 1: no_yawn, 2: Closed, 3: Open).
+    """
     labels = ["Closed", "Open"]
     IMG_SIZE = 145
     data = []
@@ -189,6 +242,22 @@ def get_data(dir_path="data/drowsiness"):
 
 
 def load_and_preprocess_data(data_dir="data/drowsiness"):
+    """
+    Load and preprocess the full dataset for training.
+
+    Steps:
+    - Ensure `data_dir` is present, attempt to download if missing.
+    - Collect mouth-cropped examples for yawn/no_yawn and images for
+      Closed/Open classes.
+    - Stack and reshape image arrays to `(N, 145, 145, 3)` and return
+      one-hot encoded labels.
+
+    Returns
+    -------
+    X, y : numpy.ndarray, numpy.ndarray
+        `X` is an array of shape `(N, 145, 145, 3)`. `y` is the one-hot
+        encoded label matrix.
+    """
     # Check if data directory exists, if not try to download
     if not os.path.exists(data_dir) or not os.listdir(data_dir):
         print(
@@ -229,6 +298,11 @@ def load_and_preprocess_data(data_dir="data/drowsiness"):
 
 
 def prepare_image(filepath, face_cas_path=None):
+    """
+    Load an image from `filepath`, normalize pixel values and resize to
+    the model input size (145x145). Returns a single-example batch
+    shaped `(1, 145, 145, 3)` suitable for `model.predict`.
+    """
     IMG_SIZE = 145
     if face_cas_path is None:
         face_cas_path = get_haarcascade_path()

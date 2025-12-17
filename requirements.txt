@@ -10,3 +10,5 @@ scikit-learn
 tensorflow
 streamlit
 tensorflow
+playsound
+Pillow

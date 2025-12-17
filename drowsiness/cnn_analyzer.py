@@ -6,11 +6,20 @@ import time
 import datetime
 from tensorflow.keras.models import load_model
 from drowsiness.cnn_utils import get_haarcascade_path, get_mouth_from_face_image
+from drowsiness.base_analyzer import BaseAnalyzer
 from drowsiness.utils import play_alarm, log_event
 
 
-class CNNDrowsinessDetector:
-    def __init__(self, model_path="models/drowsiness_cnn.h5"):
+class CnnAnalyzer(BaseAnalyzer):
+    """
+    A class to detect drowsiness and yawns using a CNN model.
+    Attributes:
+        model: The loaded CNN model for drowsiness and yawn detection.
+        face_cascade: Haar cascade classifier for face detection.
+        eye_cascade: Haar cascade classifier for eye detection.
+    """
+    def __init__(self, model_path="models/drowsiness_cnn_trained.h5"):
+        super().__init__()
         self.model_path = model_path
         self.model = None
         self.face_cascade = None
@@ -19,12 +28,14 @@ class CNNDrowsinessDetector:
         self.IMG_SIZE = 145
         self.eye_consecutive_frames = 20
         self.eye_counter = 0
-        self.is_drowsy = False
         self.last_drowsy_time = 0.0
 
         self.load_resources()
 
     def load_resources(self):
+        """
+        Loads the CNN model and Haar cascade classifiers.
+        """
         if os.path.exists(self.model_path):
             print(f"Loading model from {self.model_path}...")
             self.model = load_model(self.model_path)
@@ -39,7 +50,14 @@ class CNNDrowsinessDetector:
         self.face_cascade = cv2.CascadeClassifier(face_cas_path)
         self.eye_cascade = cv2.CascadeClassifier(eye_cas_path)
 
-    def predict_frame(self, frame):
+    def analyze_frame(self, frame):
+        """
+        Analyzes a single video frame for drowsiness and yawns.
+        Args:
+            frame: The video frame to analyze.
+        Returns:
+            A tuple containing the frame with annotations, and the drowsiness/yawn status.
+        """
         if self.model is None:
             cv2.putText(
                 frame,
@@ -136,12 +154,12 @@ class CNNDrowsinessDetector:
                 self.eye_counter += 1
             else:
                 self.eye_counter = 0
-                self.is_drowsy = False
+                self._is_drowsy = False
 
-            if self.eye_counter >= self.eye_consecutive_frames and not self.is_drowsy:
-                self.is_drowsy = True
+            if self.eye_counter >= self.eye_consecutive_frames and not self._is_drowsy:
+                self._is_drowsy = True
                 self.last_drowsy_time = time.time()
-                frame_is_drowsy = True
+                frame__is_drowsy = True
                 # Play alarm (non-blocking where possible)
                 try:
                     play_alarm()
@@ -158,16 +176,29 @@ class CNNDrowsinessDetector:
                 frame, status, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2
             )
 
-        return frame, self.is_drowsy, frame_is_yawning
-    
+        return frame, self._is_drowsy, frame_is_yawning
+
     def __getattr__(self, name):
-        if name == 'analyze_frame':
-            return self.predict_frame
-        raise AttributeError(f"'CNNDrowsinessDetector' object has no attribute '{name}'")
+        """
+        Dynamic attribute access to allow method calls similar to BaseAnalyzer.
+        Args:
+            name: The attribute name being accessed.
+        Returns:
+            The corresponding method if it exists.
+        """
+        if name in ("predict_frame", "analyze"):
+            return self.analyze_frame
+        raise AttributeError(
+            f"'CnnAnalyzer' object has no attribute '{name}'"
+        )
 
 
-def predict_drowsiness(model_path="models/drowsiness_cnn.h5"):
-    detector = CNNDrowsinessDetector(model_path)
+def predict_drowsiness(model_path="models/drowsiness_cnn_trained.h5"):
+    """Runs the drowsiness detection using the CNN analyzer.
+    Args:
+        model_path: Path to the trained CNN model.
+    """
+    detector = CnnAnalyzer(model_path)
 
     if detector.model is None:
         return

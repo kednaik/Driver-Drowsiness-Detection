@@ -2,35 +2,29 @@
 
 This project is a real-time driver drowsiness detection system that uses computer vision to prevent accidents caused by driver fatigue. It analyzes a driver's facial landmarks from a webcam feed to detect signs of drowsiness, such as closed eyes and yawning, and issues an alert.
 
-## Running the Streamlit app with the project's `.venv`
+## Clone the repository
 
-If you created a virtual environment at `.venv`, run Streamlit using the venv Python so Streamlit uses the same packages:
+Clone the repository (SSH):
 
-1. Create and install (if you haven't already):
+```bash
+git clone git@github.com:kednaik/Driver-Drowsiness-Detection.git
+cd Driver-Drowsiness-Detection
+```
+
+## Environment setup
+
+Create and activate a Python virtual environment and install dependencies (macOS / zsh):
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-2. Start the Streamlit app (two options):
-
-- Using the helper script (recommended):
-
-```bash
-./scripts/run_streamlit_venv.sh
-```
-
-- Or directly with the venv Python (no activation required):
-
-```bash
-.venv/bin/python -m streamlit run app.py
-```
-
-3. In VS Code, you can point the workspace interpreter to the venv. The workspace settings file `.vscode/settings.json` is already configured to use `.venv/bin/python` if present.
-
-If Streamlit still starts with the wrong Python, ensure you invoked the command with the `.venv` Python above, or configure your editor/IDE to use the `.venv` interpreter.
-
+Notes:
+- Use Python 3.8+ where possible.
+- If you prefer a helper script, run `bash ./scripts/setup_venv.sh`.
+- In VS Code, point the workspace interpreter to `.venv/bin/python` so the notebook kernel uses the same environment.
 
 ## Features
 
@@ -40,133 +34,131 @@ If Streamlit still starts with the wrong Python, ensure you invoked the command 
 - **Audible Alerts:** Plays an alarm sound when drowsiness is detected.
 - **Event Logging:** Logs all drowsiness and yawn events to a CSV file for later analysis.
 
-## Bonus: Streamlit Demo
+## Problem & Solution
 
-As an additional feature (bonus), this repository includes a Streamlit web app that demonstrates all three drowsiness detection approaches (dlib landmarks, MediaPipe Face Mesh, and the CNN classifier). The app provides a simple UI to switch between detection modes, view live webcam output, and inspect logged events.
+1. Problem: Drivers can fall asleep or lose attention while driving, which
+    increases the risk of accidents. The project detects two primary visual
+    cues of drowsiness: prolonged eye closure and yawning, using a webcam
+    feed.
 
-## How It Works
+2. Signals & Models: The program extracts diagnostic signals — Eye Aspect
+    Ratio (EAR) and Mouth Aspect Ratio (MAR) — from facial landmarks (dlib
+    or MediaPipe). Optionally, a CNN classifier operates on cropped mouth/eye
+    ROIs to produce complementary predictions when landmark-based cues are
+    ambiguous.
 
-The system uses the `dlib` library to detect facial landmarks and `OpenCV` to process video frames. It calculates the Eye Aspect Ratio (EAR) to determine if the eyes are closed. If the EAR falls below a certain threshold for a specified number of consecutive frames, the system concludes that the driver is drowsy and plays an alarm. It also monitors the Mouth Aspect Ratio (MAR) to detect yawns, which are also logged as potential signs of fatigue.
+3. Processing Pipeline: Frames are captured from the camera, faces are
+    detected, and either dense landmarks or Haar-based ROIs are used to
+    compute EAR/MAR or produce CNN inputs. Frame-level outputs are smoothed
+    through short-term counters to reduce false positives.
 
-## Project Structure
+4. Action & Feedback: When aggregated metrics indicate drowsiness, the
+    system plays an audible alarm, overlays status annotations on the video
+    frame, and logs the event (CSV + optional screenshot) for audit and
+    analysis.
+
+5. Design & Extensibility: Analyzer logic is modular (`BaseAnalyzer`,
+    `DlibAnalyzer`, `MediapipeAnalyzer`, CNN wrapper). Utilities centralize
+    EAR/MAR, logging, and alarm playback so components can be swapped,
+    tested with lightweight stubs, or integrated into the Jupyter demo or
+    Streamlit UI.
+
+# Driver Drowsiness Alert System
+
+Brief: A real-time driver drowsiness detection toolkit that uses computer
+vision and lightweight classifiers to detect closed eyes and yawning from
+webcam frames and trigger alerts. The repository includes three analyzer
+implementations (dlib landmarks, MediaPipe Face Mesh, and a CNN-based
+classifier), utility helpers, a Jupyter demo notebook, a Streamlit UI,
+and tests.
+
+Repository (GitHub): https://github.com/your-username/driver-drowsiness-detection
+
+Replace the URL above with your repository URL.
+
+---
+
+
+Project Structure (matches the notebook sections)
 
 ```
-aai-551-project-v1/
-│
-├── drowsiness/
+driver-drowsiness-detection/
+├── drowsiness/               # core analyzers and helpers
 │   ├── __init__.py
-│   ├── face_detector.py       # Class for face and landmark detection
-│   ├── drowsiness_analyzer.py # Class for analyzing drowsiness
-│   └── utils.py               # Utility functions (EAR, MAR, alarm)
-│
-├── tests/
-│   └── test_drowsiness.py     # Pytest tests for the system
-│
-├── models/
-│   └── shape_predictor_68_face_landmarks.dat # dlib's landmark model (needs to be downloaded)
-│
-├── logs/
-│   └── drowsiness_log.csv     # Log file for drowsiness events
-│
-├── alarm/
-│   └── alarm.wav              # Alarm sound file (needs to be added)
-│
-├── main.ipynb                 # Main Jupyter Notebook to run the system
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
+│   ├── base_analyzer.py       # shared detection/overlay + BaseAnalyzer
+│   ├── face_detector.py      # face detector abstraction (dlib/mediapipe helpers)
+│   ├── dlib_analyzer.py      # dlib-based analyzer (EAR/MAR)
+│   ├── mediapipe_analyzer.py # MediaPipe-based analyzer (Face Mesh)
+│   ├── cnn_analyzer.py       # CNN-based detector / wrapper
+│   ├── cnn_trainer.py        # Trainer and model building utilities
+│   ├── cnn_utils.py          # helpers for ROI extraction and preprocessing
+│   └── utils.py               # Utility functions (EAR, MAR, logging, alarms)
+├── data/                     # optional datasets (yawn/open/closed)
+├── models/                   # pretrained models (dlib predictor, CNN .h5)
+├── logs/                     # event logs and screenshots
+├── alarm/                    # alarm sound files
+├── prediction_output/        # example annotated outputs (images)
+├── main.ipynb                # interactive Jupyter demo (notebook)
+├── requirements.txt
+├── scripts/                  # helper scripts and developer utilities
+│   ├── setup_venv.sh         # create venv and install requirements
+│   ├── run_streamlit_venv.sh # helper to run streamlit inside the repo venv
+│   └── run_tests.sh          # convenience wrapper to run pytest
+├── tests/                    # pytest unit tests and test utilities
+│   ├── conftest.py           # test-time mocks + PYTHONPATH helper
+│   ├── test_utils_functions.py
+│   ├── test_drowsiness.py
+│   ├── test_ui_overlay.py
+│   └── test_base_analyzer.py # added unit tests for BaseAnalyzer
+└── README.md
 ```
 
-## Setup and Installation
+# Table of Contents
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd aai-551-project-v1
-    ```
+1. Drowsiness Detection (dlib landmarks)
+2. Drowsiness Detection (MediaPipe Face Mesh)
+3. Drowsiness Detection (CNN classifier)
+4. Log analysis demo
+5. Bonus: Streamlit web application
 
-2.  **Create and activate a virtual environment (recommended):**
+---
 
-    It's strongly recommended to run the project inside a Python virtual environment to avoid dependency conflicts.
+# 1) Drowsiness Detection — Dlib landmarks
 
-    Option A — quick setup script (macOS/Linux `zsh`):
-    ```bash
-    # Create venv and install requirements
-    bash scripts/setup_venv.sh
-    # Activate the venv afterwards
-    source .venv/bin/activate
-    ```
+Short: Classic EAR/MAR thresholding using `dlib` 68-point landmarks. This
+is lightweight and works well when the driver's face is approximately
+frontal to the camera.
 
-    Option B — manual steps:
-    ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate  # on macOS / Linux (zsh)
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    ```
+How to run (notebook): open `main.ipynb` and run the Dlib section cells.
 
-    Once the venv is activated, run Python scripts normally (they'll use the venv's interpreter).
+Example output:
 
-    If you don't want to use a virtual environment, you can still install dependencies globally with:
-    ```bash
-    pip install -r requirements.txt
-    ```
+![Dlib example](prediction_output/dlib_drowsiness_output.png)
 
-3.  **Download the dlib shape predictor model:**
-    - Download `shape_predictor_68_face_landmarks.dat.bz2` from [http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2](http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2).
-    - Extract the file and place `shape_predictor_68_face_landmarks.dat` in the `models/` directory.
+---
 
-4.  **Add an alarm sound:**
-    - Place a `.wav` file named `alarm.wav` in the `alarm/` directory.
+# 2) Drowsiness Detection — MediaPipe Face Mesh
 
-## Usage
+Short: Uses MediaPipe Face Mesh to obtain dense facial landmarks and
+computes EAR/MAR from the mesh coordinates. More robust to moderate head
+pose and lighting variations than the dlib landmarks approach.
 
-### Method 1: Facial Landmarks (dlib)
+How to run (notebook): open `main.ipynb` and run the MediaPipe section
+cells.
 
-Run the `main.ipynb` notebook to start the drowsiness detection system using facial landmarks.
+Example output:
 
-### Method 2: CNN Model
+![MediaPipe example](prediction_output/mediapipe_drowsiness_output.png)
 
-This method uses a Convolutional Neural Network (CNN) trained on the Drowsiness Dataset.
+---
 
-1.  **Download the Dataset:**
-    - Download the dataset from Kaggle: [Drowsiness Dataset](https://www.kaggle.com/datasets/dheerajperumandla/drowsiness-dataset/data).
-    - Extract the dataset into `data/drowsiness`. The structure should be:
-        ```
-        data/drowsiness/
-        ├── Closed/
-        ├── Open/
-        ├── yawn/
-        └── no_yawn/
-        ```
+# 3) Drowsiness Detection — CNN classifier
 
-2.  **Train the Model:**
-    Run the training script to train the CNN model.
-    ```bash
-    # Use the trainer class to run training from Python or run the module if supported.
-    # Programmatic usage (recommended):
-    #
-    # ```python
-    # from drowsiness.cnn_trainer import CNNTrainer
-    # trainer = CNNTrainer()
-    # trainer.train(epochs=50, batch_size=32)
-    # ```
-    #
-    # If you prefer a module entrypoint and it's available, you can run:
-    python -m drowsiness.cnn_trainer
-    ```
-    This will save the trained model to `models/drowsiness_cnn.h5` and a training history plot.
+Short: A CNN-based classifier that predicts mouth/eye states from cropped
+ROIs (mouth and eyes). Useful in controlled settings or as a second
+signal combined with landmark-based heuristics.
 
-3.  **Run Real-time Prediction:**
-    Run the prediction script to use the trained model with your webcam.
-    ```bash
-    python -m drowsiness.cnn_analyzer
-    ```
-
-    should be updated to:
-
-    ```bash
-    python -m drowsiness.cnn_trainer
-    ```
+How to run (notebook): open `main.ipynb` and run the CNN section cells.
 
 ### Preprocessing for Yawn Detection
 
@@ -180,6 +172,50 @@ To improve the accuracy of yawn detection, the system preprocesses the input ima
 3.  **Resizing:** The cropped mouth image is then resized to 145x145 pixels before being fed into the CNN model.
 
 This ensures that the model learns features specific to the mouth shape (open vs. closed) rather than irrelevant facial features.
+
+**Caveat about the CNN method:**
+
+- The CNN-based approach in this project relies heavily on reliably detecting and cropping the eyes/mouth regions before prediction. In practice this means the CNN's accuracy is sensitive to the face/eye/mouth detection step, lighting, occlusion, and how well the mouth/eye ROI is cropped and resized.
+- Because of this dependency, the CNN method can be less effective in uncontrolled live webcam scenarios compared to EAR/MAR thresholding with robust landmark detectors (dlib or MediaPipe). Use the CNN for controlled image classification or as a complement to landmark-based methods rather than as a standalone, drop-in replacement for real-time detection.
+
+
+Example output:
+
+![CNN example](prediction_output/cnn_drowsiness_output.png)
+
+---
+
+# 4) Log analysis demo
+
+Short: Analyze previously logged drowsiness events stored in
+`logs/drowsiness_log.csv`. The tools print summaries, plot timelines, and
+display thumbnails of logged events.
+
+How to run (notebook): open `main.ipynb` and run the Logs Analysis cells.
+
+Example output (log summary / thumbnail):
+
+![Log analysis example](prediction_output/log_analysis.png)
+
+---
+
+# 5) Bonus: Streamlit web application
+
+Short: A Streamlit-based UI that demonstrates the three detection modes,
+live webcam preview, and recent events. Start the app using the helper
+script in `scripts/` or run Streamlit with the `.venv` Python.
+
+How to run (quick):
+
+```bash
+# with venv activated
+bash ./scripts/run_streamlit_venv.sh
+# or
+.venv/bin/python -m streamlit run app.py
+```
+
+Open http://localhost:8501 in your browser.
+
 
 ## Testing
 Run the test suite with `pytest`. Recommended workflow when using the project's virtual environment:

@@ -1,23 +1,51 @@
 import cv2
 import mediapipe as mp
 import numpy as np
+from drowsiness.base_analyzer import BaseAnalyzer
 from drowsiness.utils import compute_eye_aspect_ratio
 
 
-class MediapipeAnalyzer:
+class MediapipeAnalyzer(BaseAnalyzer):
+    """
+    A class to analyze drowsiness using MediaPipe Face Mesh.
+    """
+
     def __init__(
         self,
         static_image_mode=False,
         max_num_faces=1,
         min_detection_confidence=0.5,
         min_tracking_confidence=0.5,
+        draw_landmarks=True,
     ):
+        """
+        Initialize the MediapipeAnalyzer.
+
+        Parameters
+        ----------
+        static_image_mode : bool
+            Whether to treat the input images as a batch of static and
+            possibly unrelated images. When False, the solution treats the
+            input as a video stream.
+        max_num_faces : int
+            Maximum number of faces to detect.
+        min_detection_confidence : float
+            Minimum confidence value ([0.0, 1.0]) from the face detection
+            model for the detection to be considered successful.
+        min_tracking_confidence : float
+            Minimum confidence value ([0.0, 1.0]) from the landmark-tracking
+            model for the face landmarks to be considered tracked.
+        draw_landmarks : bool
+            If True, draw the face mesh landmarks onto processed frames.
+        """
+        super().__init__()
         self.face_mesh = mp.solutions.face_mesh.FaceMesh(
             static_image_mode=static_image_mode,
             max_num_faces=max_num_faces,
             min_detection_confidence=min_detection_confidence,
             min_tracking_confidence=min_tracking_confidence,
         )
+        self.draw_landmarks = draw_landmarks
 
     def close(self):
         """Release MediaPipe resources if available."""
@@ -36,9 +64,32 @@ class MediapipeAnalyzer:
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        """
+        Context manager exit hook. Ensures native MediaPipe resources are
+        released by calling :meth:`close`.
+
+        Parameters
+        ----------
+        exc_type, exc, tb : object
+            Exception information forwarded by the context manager protocol.
+        """
         self.close()
 
     def _calculate_distance(self, p1, p2):
+        """
+        Compute Euclidean distance between two MediaPipe normalized landmarks.
+
+        Parameters
+        ----------
+        p1, p2 : objects with .x and .y attributes
+            MediaPipe landmark-like objects (normalized coordinates).
+
+        Returns
+        -------
+        float
+            The Euclidean distance between the two points in normalized
+            coordinate space.
+        """
         return np.sqrt((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2)
 
     def calculate_ear(self, eye_landmarks):
@@ -121,7 +172,23 @@ class MediapipeAnalyzer:
         except Exception:
             return None
 
-    def process_frame(self, frame, draw_landmarks=False):
+    def process_frame(self, frame):
+        """
+        Process a single BGR frame with MediaPipe Face Mesh and compute
+        EAR and MAR values when possible.
+
+        Parameters
+        ----------
+        frame : numpy.ndarray
+            BGR image as returned by OpenCV capture/read functions.
+
+        Returns
+        -------
+        tuple
+            (ear, mar) where each value is a float or None when the metric
+            could not be computed. `ear` is the average eye-aspect ratio
+            across detected eyes, `mar` is the mouth-aspect ratio.
+        """
         image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         results = self.face_mesh.process(image_rgb)
 
@@ -135,7 +202,7 @@ class MediapipeAnalyzer:
                 right_indices = [362, 385, 387, 263, 373, 380]
 
                 # Optionally draw the face mesh onto the original frame
-                if draw_landmarks:
+                if self.draw_landmarks:
                     try:
                         mp.solutions.drawing_utils.draw_landmarks(
                             frame,
@@ -148,9 +215,9 @@ class MediapipeAnalyzer:
                                 color=(0, 128, 255), thickness=1, circle_radius=1
                             ),
                         )
-                    except Exception:
+                    except Exception as e:
                         # Drawing failures should not stop processing
-                        pass
+                        print(f"Warning: Failed to draw landmarks: {e}")
 
                 # Extract 6-point eye landmark sets commonly used for EAR
                 left_eye_landmarks = [
@@ -185,12 +252,14 @@ class MediapipeAnalyzer:
                 try:
                     if len(left_eye_pts) == 6:
                         left_ear = compute_eye_aspect_ratio(left_eye_pts)
-                except Exception:
+                except Exception as e:
+                    print(f"Warning: Failed to compute left EAR: {e}")
                     left_ear = None
                 try:
                     if len(right_eye_pts) == 6:
                         right_ear = compute_eye_aspect_ratio(right_eye_pts)
-                except Exception:
+                except Exception as e:
+                    print(f"Warning: Failed to compute right EAR: {e}")
                     right_ear = None
 
                 if left_ear is not None and right_ear is not None:
@@ -220,29 +289,51 @@ class MediapipeAnalyzer:
                             if i < len(face_landmarks.landmark)
                         ]
                         mar = self.calculate_mar(mouth_landmarks)
-                except Exception:
+                except Exception as e:
+                    print(f"Warning: Failed to compute MAR: {e}")
                     mar = None
 
         return ear, mar
- 
+
+    def analyze_frame(self, frame):
+        """
+        Analyze a frame using a MediaPipe-based analyzer instance.
+
+        Args:
+            frame: BGR image (numpy array) to analyze.
+        Returns:
+            (frame, is_drowsy, is_yawning) with overlays applied and internal state updated.
+        """
+        try:
+            ear, mar = self.process_frame(frame)
+            # Apply the same downstream logic (counters, overlays, logging)
+            self._apply_detection_logic(ear, mar, frame)
+        except Exception as e:
+            print(f"Warning: Failed to analyze frame: {e}")
+
+        return frame, self._is_drowsy, self._is_yawning
+
     def __getattr__(self, name):
         """
         Provide a few compatibility aliases and forward unknown attribute lookups
         to the underlying MediaPipe `face_mesh` object when appropriate.
- 
+
         Common aliases provided:
-        - `analyze`, `analyze_frame`, `process` -> `process_frame`
- 
+        - `analyze`, `analyze_frame_mediapipe` -> `analyze_frame`
+        - `process` -> `process_frame`
+
         If the attribute exists on the internal `face_mesh`, it will be
         returned. Otherwise an AttributeError is raised.
         """
         # Provide simple aliases to match the DrowsinessAnalyzer API
-        if name in ("analyze", "analyze_frame", "process"):
+        if name in ("process"):
             return self.process_frame
- 
+
+        if name in ("analyze", "analyze_frame_mediapipe"):
+            return self.analyze_frame
+
         # Forward unknown attributes to the underlying MediaPipe FaceMesh
         if hasattr(self, "face_mesh") and hasattr(self.face_mesh, name):
             return getattr(self.face_mesh, name)
- 
+
         raise AttributeError(f"'MediapipeAnalyzer' object has no attribute '{name}'")
- 
