@@ -1,6 +1,7 @@
 import numpy as np
 import types
 import sys
+from drowsiness import base_analyzer as dda
 
 
 def test_draw_status_overlay_modifies_frame():
@@ -15,9 +16,8 @@ def test_draw_status_overlay_modifies_frame():
 
     # Now import the analyzer module (FaceDetector won't be initialized because
     # we will not call DrowsinessAnalyzer.__init__)
-    from drowsiness import drowsiness_analyzer as dda
 
-    analyzer = object.__new__(dda.DrowsinessAnalyzer)
+    analyzer = object.__new__(dda.BaseAnalyzer)
 
     # Set only the attributes used by draw_status_overlay
     analyzer._is_drowsy = True
@@ -27,7 +27,7 @@ def test_draw_status_overlay_modifies_frame():
     assert frame.sum() == 0
 
     # Call the overlay drawing method
-    analyzer.draw_status_overlay(frame, ear=0.1, mar=0.7)
+    analyzer.draw_status_overlay(frame)
 
     # After drawing, some pixels should be non-zero (rectangle/text drawn)
     assert frame.sum() > 0

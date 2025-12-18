@@ -85,7 +85,7 @@ def test_mediapipe_analyzer_process_frame_monkeypatched():
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
 
     analyzer = MediapipeAnalyzer()
-    ear, mar = analyzer.process_frame(frame, draw_landmarks=False)
+    ear, mar = analyzer.process_frame(frame)
 
     # Both EAR and MAR should be computed and be floats
     assert ear is not None and isinstance(ear, float)

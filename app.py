@@ -1,9 +1,9 @@
 import streamlit as st
 import cv2
 import numpy as np
-from drowsiness.drowsiness_analyzer import DrowsinessAnalyzer
+from drowsiness.dlib_analyzer import DlibAnalyzer
 from drowsiness.mediapipe_analyzer import MediapipeAnalyzer
-from drowsiness.cnn_analyzer import CNNDrowsinessDetector
+from drowsiness.cnn_analyzer import CnnAnalyzer
 import tempfile
 
 st.set_page_config(page_title="Drowsiness Detection App", layout="wide")
@@ -18,17 +18,16 @@ method = st.sidebar.selectbox(
 run_app = st.sidebar.checkbox("Run Camera", value=True)
 
 
-
 # Initialize Analyzers
 @st.cache_resource
 def load_analyzers():
-    drowsiness_analyzer = DrowsinessAnalyzer()
+    dlib_analyzer = DlibAnalyzer()
     mediapipe_analyzer = MediapipeAnalyzer()
-    cnn_analyzer = CNNDrowsinessDetector()
-    return drowsiness_analyzer, mediapipe_analyzer, cnn_analyzer
+    cnn_analyzer = CnnAnalyzer()
+    return dlib_analyzer, mediapipe_analyzer, cnn_analyzer
 
 
-drowsiness_analyzer, mediapipe_analyzer, cnn_analyzer = load_analyzers()
+dlib_analyzer, mediapipe_analyzer, cnn_analyzer = load_analyzers()
 
 FRAME_WINDOW = st.image([])
 status_text = st.empty()
@@ -52,20 +51,15 @@ if run_app:
 
             is_drowsy = False
             is_yawning = False
-
+            analyzer = None
             if method == "Dlib (Landmarks)":
-                frame, is_drowsy, is_yawning = drowsiness_analyzer.analyze_frame(frame)
+                analyzer = dlib_analyzer
             elif method == "MediaPipe":
-                # Mediapipe analyzer needs the helper method from DrowsinessAnalyzer
-                # but we can also use the one in main.ipynb logic
-                # The DrowsinessAnalyzer has a method analyze_frame_mediapipe
-                frame, is_drowsy, is_yawning = (
-                    drowsiness_analyzer.analyze_frame_mediapipe(
-                        frame, mediapipe_analyzer, draw_landmarks=True
-                    )
-                )
+                analyzer = mediapipe_analyzer
             elif method == "CNN":
-                frame, is_drowsy, is_yawning = cnn_analyzer.predict_frame(frame)
+                analyzer = cnn_analyzer
+                
+            frame, is_drowsy, is_yawning = analyzer.analyze_frame(frame)
 
             # Convert to RGB for Streamlit
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

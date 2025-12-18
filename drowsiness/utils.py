@@ -271,8 +271,6 @@ def cleanup_video_resources(cap=None, window_names=None, analyzers=None):
 def run_drowsiness_detection_loop(
     analyzer,
     window_name="Drowsiness Detection",
-    mediapipe_analyzer=None,
-    use_mediapipe=False,
     flip_frame=True,
 ):
     """
@@ -282,10 +280,8 @@ def run_drowsiness_detection_loop(
     Handles camera initialization, frame processing, display, and cleanup.
 
     Args:
-        analyzer (DrowsinessAnalyzer): The drowsiness analyzer instance.
+        analyzer: The drowsiness analyzer instance can be instance of any 3 Dlib/CNN/MediaPipe analyzer class which extends BaseAnalyzer.
         window_name (str): Name of the display window.
-        mediapipe_analyzer (MediapipeAnalyzer or None): Optional MediaPipe analyzer for alternate detection.
-        use_mediapipe (bool): If True, use analyze_frame_mediapipe; else use analyze_frame.
         flip_frame (bool): If True, flip frame horizontally (mirror effect).
 
     Returns:
@@ -304,8 +300,8 @@ def run_drowsiness_detection_loop(
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
         try:
             cv2.resizeWindow(window_name, 1024, 768)
-        except Exception:
-            pass
+        except Exception as e:
+            print("Warning: Unable to resize window. Continuing with default size.", e)
 
         while True:
             ret, frame = cap.read()
@@ -317,13 +313,7 @@ def run_drowsiness_detection_loop(
             if flip_frame:
                 frame = cv2.flip(frame, 1)
 
-            # Analyze frame using selected method
-            if use_mediapipe and mediapipe_analyzer is not None:
-                frame, is_drowsy, is_yawning = analyzer.analyze_frame_mediapipe(
-                    frame, mediapipe_analyzer, draw_landmarks=True
-                )
-            else:
-                frame, is_drowsy, is_yawning = analyzer.analyze_frame(frame)
+            frame, is_drowsy, is_yawning = analyzer.analyze_frame(frame)
 
             # Display the frame
             cv2.imshow(window_name, frame)
@@ -342,8 +332,6 @@ def run_drowsiness_detection_loop(
 
     finally:
         analyzers_to_close = [analyzer]
-        if mediapipe_analyzer is not None:
-            analyzers_to_close.append(mediapipe_analyzer)
         cleanup_video_resources(
             cap=cap, window_names=[window_name], analyzers=analyzers_to_close
         )

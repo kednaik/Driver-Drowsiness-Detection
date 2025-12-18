@@ -27,11 +27,33 @@ class CNNTrainer:
     """
 
     def __init__(self, input_shape=(145, 145, 3), num_classes=4):
+        """
+        Initialize a trainer instance.
+
+        Parameters
+        ----------
+        input_shape : tuple
+            The expected shape of input images (height, width, channels).
+        num_classes : int
+            Number of output classes for the classifier (default 4: yawn/no_yawn/Closed/Open).
+        """
         self.input_shape = input_shape
         self.num_classes = num_classes
         self.model = None
 
     def build_model(self):
+        """
+        Build a simple CNN classifier model.
+
+        The architecture is a small convolutional network with successive
+        Conv2D + MaxPooling blocks, followed by Flatten, Dropout and Dense
+        layers. The final layer uses softmax to produce class probabilities.
+
+        Returns
+        -------
+        model : keras.Model
+            A compiled Keras `Sequential` model ready for training.
+        """
         model = Sequential()
 
         model.add(Conv2D(256, (3, 3), activation="relu", input_shape=self.input_shape))
@@ -52,7 +74,9 @@ class CNNTrainer:
         model.add(Dense(64, activation="relu"))
         model.add(Dense(self.num_classes, activation="softmax"))
 
-        model.compile(loss="categorical_crossentropy", metrics=["accuracy"], optimizer="adam")
+        model.compile(
+            loss="categorical_crossentropy", metrics=["accuracy"], optimizer="adam"
+        )
 
         self.model = model
         return model
@@ -64,6 +88,30 @@ class CNNTrainer:
         batch_size=32,
         model_save_path="models/drowsiness_cnn.h5",
     ):
+        """
+        Train the CNN model using preprocessed data from `data_dir`.
+
+        The method loads data via `load_and_preprocess_data`, splits into
+        train/test sets (uses scikit-learn locally), builds the model if
+        necessary, fits the model using Keras data generators, saves the
+        trained weights, and writes a training history plot.
+
+        Parameters
+        ----------
+        data_dir : str
+            Directory containing the preprocessed dataset (default 'data/drowsiness').
+        epochs : int
+            Number of training epochs.
+        batch_size : int
+            Batch size used by the training data generator.
+        model_save_path : str
+            Filesystem path where the trained model `.h5` will be saved.
+
+        Returns
+        -------
+        tuple
+            `(model, history)` on success, or `None` when data loading fails.
+        """
         # Load data
         X, y = load_and_preprocess_data(data_dir)
         if X is None or y is None:
@@ -90,11 +138,17 @@ class CNNTrainer:
         )
 
         # Generators
-        train_generator = ImageDataGenerator(rescale=1 / 255, zoom_range=0.2, horizontal_flip=True, rotation_range=30)
+        train_generator = ImageDataGenerator(
+            rescale=1 / 255, zoom_range=0.2, horizontal_flip=True, rotation_range=30
+        )
         test_generator = ImageDataGenerator(rescale=1 / 255)
 
-        train_generator = train_generator.flow(np.array(X_train), y_train, shuffle=False, batch_size=batch_size)
-        test_generator = test_generator.flow(np.array(X_test), y_test, shuffle=False, batch_size=batch_size)
+        train_generator = train_generator.flow(
+            np.array(X_train), y_train, shuffle=False, batch_size=batch_size
+        )
+        test_generator = test_generator.flow(
+            np.array(X_test), y_test, shuffle=False, batch_size=batch_size
+        )
 
         # Build model
         if self.model is None:
@@ -134,17 +188,37 @@ class CNNTrainer:
         plt.legend()
         plt.title("Loss")
 
-        plot_path = os.path.join(os.path.dirname(model_save_path), "training_history.png")
+        plot_path = os.path.join(
+            os.path.dirname(model_save_path), "training_history.png"
+        )
         plt.savefig(plot_path)
         print(f"Training history plot saved to {plot_path}")
 
         return self.model, history
 
     def predict_image(self, image_path, model_path="models/drowsiness_cnn_trained.h5"):
-        """Predict a single image file using the trained CNN.
+        """
+        Predict a single image file using a trained CNN model.
 
-        If a face is detected the function will attempt to crop the mouth region
-        first; otherwise it will resize the full image. Returns (label, score).
+        Behavior
+        --------
+        - Validates that `image_path` and `model_path` exist.
+        - Loads the model from `model_path` using `load_model`.
+        - Attempts to detect and crop the mouth from the image; if cropping
+          fails the entire image is preprocessed and used for prediction.
+
+        Parameters
+        ----------
+        image_path : str
+            Path to an input image file to classify.
+        model_path : str
+            Path to the trained Keras `.h5` model file.
+
+        Returns
+        -------
+        tuple
+            `(label, score)` where `label` is one of `['yawn','no_yawn','Closed','Open']`
+            and `score` is the predicted probability for the returned class.
         """
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image not found: {image_path}")
@@ -175,7 +249,6 @@ class CNNTrainer:
         return labels_new[class_idx], float(preds[0][class_idx])
 
 
-
 def _cli_args():
     parser = argparse.ArgumentParser(description="CNN trainer / predictor CLI")
     sub = parser.add_subparsers(dest="cmd")
@@ -187,7 +260,10 @@ def _cli_args():
     t.add_argument("--model-save-path", default="models/drowsiness_cnn.h5")
 
     p = sub.add_parser("predict", help="Run prediction")
-    p.add_argument("--image", help="Path to image file to predict (optional). If omitted, opens webcam via legacy predictor.")
+    p.add_argument(
+        "--image",
+        help="Path to image file to predict (optional). If omitted, opens webcam via legacy predictor.",
+    )
     p.add_argument("--model", default="models/drowsiness_cnn_trained.h5")
 
     return parser.parse_args()
@@ -197,7 +273,12 @@ if __name__ == "__main__":
     args = _cli_args()
     if args.cmd == "train":
         trainer = CNNTrainer()
-        trainer.train(data_dir=args.data_dir, epochs=args.epochs, batch_size=args.batch_size, model_save_path=args.model_save_path)
+        trainer.train(
+            data_dir=args.data_dir,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            model_save_path=args.model_save_path,
+        )
     elif args.cmd == "predict":
         if args.image:
             trainer = CNNTrainer()
