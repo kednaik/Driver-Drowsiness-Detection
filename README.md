@@ -124,8 +124,6 @@ and tests.
 
 Repository (GitHub): https://github.com/your-username/driver-drowsiness-detection
 
-Replace the URL above with your repository URL.
-
 ---
 
 
