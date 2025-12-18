@@ -1,0 +1,18 @@
+# Requirements for Driver Drowsiness Detection on Windows
+
+streamlit>=1.32.0
+opencv-python>=4.8.0
+mediapipe==0.10.14
+numpy>=1.26,<2.0
+scipy>=1.10
+tensorflow>=2.15,<2.16
+protobuf>=4.25,<5.0
+Pillow>=9.5
+
+# Additional Windows-specific dependencies for testing
+
+pytest>=7.4
+matplotlib
+ipykernel
+scikit-learn
+kagglehub
