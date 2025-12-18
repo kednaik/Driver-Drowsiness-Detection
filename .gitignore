@@ -14,7 +14,7 @@ env/
 .ipynb_checkpoints/
 
 # Logs
-logs/
+logs/screenshots/
 *.log
 
 # macOS
@@ -26,9 +26,6 @@ logs/
 # PyCharm
 .idea/
 
-
-# Audio files (if you want them out of repo during development)
-alarm/*.wav
 
 # pytest cache
 .pytest_cache/

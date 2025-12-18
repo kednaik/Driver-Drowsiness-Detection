@@ -2,6 +2,25 @@
 
 This project is a real-time driver drowsiness detection system that uses computer vision to prevent accidents caused by driver fatigue. It analyzes a driver's facial landmarks from a webcam feed to detect signs of drowsiness, such as closed eyes and yawning, and issues an alert.
 
+Students & Contributions:
+
+- Kedarnath Naik — `knaik4@stevens.edu`
+- Claudio Obregon — `cobregon@stevens.edu`
+
+Main contributions (per teammate):
+
+- **Kedarnath Naik** (`knaik4@stevens.edu`):
+    - Implemented the dlib-based analyzer and EAR/MAR computation.
+    - Built the CNN preprocessing, trainer, and prediction utilities.
+    - Added unit tests for analyzer components and core utilities.
+
+- **Claudio Obregon** (`cobregon@stevens.edu`):
+    - Implemented the MediaPipe Face Mesh analyzer and landmark-based
+        processing pipeline.
+    - Developed the Streamlit application and integrated live demo
+        controls into the notebook UI.
+    - Added unit tests for analyzer components
+
 ## Clone the repository
 
 Clone the repository (SSH):
