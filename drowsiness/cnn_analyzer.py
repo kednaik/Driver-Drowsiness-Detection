@@ -8,8 +8,8 @@ from tensorflow.keras.models import load_model
 from drowsiness.cnn_utils import get_haarcascade_path, get_mouth_from_face_image
 from drowsiness.base_analyzer import BaseAnalyzer
 from drowsiness.utils import play_alarm, log_event
-
-
+ 
+ 
 class CnnAnalyzer(BaseAnalyzer):
     """
     A class to detect drowsiness and yawns using a CNN model.
@@ -18,6 +18,7 @@ class CnnAnalyzer(BaseAnalyzer):
         face_cascade: Haar cascade classifier for face detection.
         eye_cascade: Haar cascade classifier for eye detection.
     """
+ 
     def __init__(self, model_path="models/drowsiness_cnn_trained.h5"):
         super().__init__()
         self.model_path = model_path
@@ -29,9 +30,12 @@ class CnnAnalyzer(BaseAnalyzer):
         self.eye_consecutive_frames = 20
         self.eye_counter = 0
         self.last_drowsy_time = 0.0
-
+        # Use BaseAnalyzer's _yawn_counter/_is_yawning for consistency
+        # Ensure a short consecutive-frame requirement to avoid single-frame flickers
+        self.yawn_consecutive_frames = 2
+ 
         self.load_resources()
-
+ 
     def load_resources(self):
         """
         Loads the CNN model and Haar cascade classifiers.
@@ -43,13 +47,13 @@ class CnnAnalyzer(BaseAnalyzer):
             print(
                 f"Model not found at {self.model_path}. Please train the model first."
             )
-
+ 
         face_cas_path = get_haarcascade_path()
         eye_cas_path = cv2.data.haarcascades + "haarcascade_eye.xml"
-
+ 
         self.face_cascade = cv2.CascadeClassifier(face_cas_path)
         self.eye_cascade = cv2.CascadeClassifier(eye_cas_path)
-
+ 
     def analyze_frame(self, frame):
         """
         Analyzes a single video frame for drowsiness and yawns.
@@ -69,25 +73,25 @@ class CnnAnalyzer(BaseAnalyzer):
                 2,
             )
             return frame, False, False
-
+ 
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
-
+ 
         status = "Active"
         color = (0, 255, 0)
-
+ 
         frame_is_yawning = False
         frame_is_drowsy = False
-
+ 
         for x, y, w, h in faces:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-
+ 
             # Face ROI
             roi_color = frame[y : y + h, x : x + w]
-
+ 
             # 1. Yawn Detection (using cropped mouth)
             cropped_mouth = get_mouth_from_face_image(roi_color)
-
+ 
             if cropped_mouth is not None:
                 resized_array = cv2.resize(
                     cropped_mouth, (self.IMG_SIZE, self.IMG_SIZE)
@@ -96,22 +100,39 @@ class CnnAnalyzer(BaseAnalyzer):
                 reshaped_array = normalized_array.reshape(
                     -1, self.IMG_SIZE, self.IMG_SIZE, 3
                 )
-
+ 
                 prediction = self.model.predict(reshaped_array, verbose=0)
                 class_idx = np.argmax(prediction)
                 prediction_label = self.labels_new[class_idx]
-
+ 
                 if prediction_label == "yawn":
+                    # Increment shared yawn counter (defined in BaseAnalyzer)
+                    self._yawn_counter += 1
+                    # Only set yawn state after a small number of consecutive frames
+                    if (
+                        self._yawn_counter >= self.yawn_consecutive_frames
+                        and not self._is_yawning
+                    ):
+                        self._is_yawning = True
+                        self._last_yawn_time = time.time()
+                        try:
+                            log_event("Yawn Detected", None, None, frame.copy())
+                        except Exception:
+                            pass
                     status = "Yawn Detected"
                     color = (0, 0, 255)
-                    frame_is_yawning = True
-
+                    frame_is_yawning = self._is_yawning
+                else:
+                    # Reset yawn counter when prediction is not 'yawn'
+                    self._yawn_counter = 0
+                    self._is_yawning = False
+ 
             # 2. Eye Detection (using Haar cascade on Face ROI)
             roi_gray = gray[y : y + h, x : x + w]
             eyes = self.eye_cascade.detectMultiScale(
                 roi_gray, scaleFactor=1.1, minNeighbors=20
             )
-
+ 
             # Only apply eye-based model prediction when 1 or 2 eyes are detected
             n_eyes = len(eyes) if hasattr(eyes, "__len__") else 0
             frame_eye_closed = False
@@ -121,7 +142,7 @@ class CnnAnalyzer(BaseAnalyzer):
                         roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2
                     )
                     eye_roi_color = roi_color[ey : ey + eh, ex : ex + ew]
-
+ 
                     # Resize and predict for eyes
                     try:
                         resized_eye = cv2.resize(
@@ -131,16 +152,16 @@ class CnnAnalyzer(BaseAnalyzer):
                         reshaped_eye = normalized_eye.reshape(
                             -1, self.IMG_SIZE, self.IMG_SIZE, 3
                         )
-
+ 
                         eye_prediction = self.model.predict(reshaped_eye, verbose=0)
                         eye_class_idx = np.argmax(eye_prediction)
                         eye_label = self.labels_new[eye_class_idx]
-
+ 
                         if eye_label == "Closed":
                             frame_eye_closed = True
                             status = "Drowsy (Eyes Closed)"
                             color = (0, 0, 255)
-
+ 
                     except Exception:
                         # Eye might be too small or other issue — skip this eye
                         pass
@@ -148,14 +169,14 @@ class CnnAnalyzer(BaseAnalyzer):
                 # If zero or more than two eyes detected, skip eye-based prediction for this face.
                 # This avoids unreliable predictions when detection is ambiguous.
                 frame_eye_closed = False
-
+ 
             # Update drowsiness counter/state based on eye closure
             if frame_eye_closed:
                 self.eye_counter += 1
             else:
                 self.eye_counter = 0
                 self._is_drowsy = False
-
+ 
             if self.eye_counter >= self.eye_consecutive_frames and not self._is_drowsy:
                 self._is_drowsy = True
                 self.last_drowsy_time = time.time()
@@ -165,19 +186,19 @@ class CnnAnalyzer(BaseAnalyzer):
                     play_alarm()
                 except Exception:
                     pass
-
+ 
                 # Log the event and let utils save the screenshot
                 try:
                     log_event("Drowsiness Detected", ear=0.0, mar=0.0, frame=frame)
                 except Exception:
                     pass
-
+ 
             cv2.putText(
                 frame, status, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2
             )
-
+ 
         return frame, self._is_drowsy, frame_is_yawning
-
+ 
     def __getattr__(self, name):
         """
         Dynamic attribute access to allow method calls similar to BaseAnalyzer.
@@ -188,45 +209,44 @@ class CnnAnalyzer(BaseAnalyzer):
         """
         if name in ("predict_frame", "analyze"):
             return self.analyze_frame
-        raise AttributeError(
-            f"'CnnAnalyzer' object has no attribute '{name}'"
-        )
-
-
+        raise AttributeError(f"'CnnAnalyzer' object has no attribute '{name}'")
+ 
+ 
 def predict_drowsiness(model_path="models/drowsiness_cnn_trained.h5"):
     """Runs the drowsiness detection using the CNN analyzer.
     Args:
         model_path: Path to the trained CNN model.
     """
     detector = CnnAnalyzer(model_path)
-
+ 
     if detector.model is None:
         return
-
+ 
     cap = cv2.VideoCapture(0)
-
+ 
     if not cap.isOpened():
         print("Cannot open camera")
         return
-
+ 
     print("Starting video stream. Press 'q' to quit.")
-
+ 
     while True:
         ret, frame = cap.read()
         if not ret:
             print("Can't receive frame (stream end?). Exiting ...")
             break
-
+ 
         frame, is_drowsy, is_yawning = detector.predict_frame(frame)
-
+ 
         cv2.imshow("Drowsiness Detection", frame)
-
+ 
         if cv2.waitKey(1) == ord("q"):
             break
-
+ 
     cap.release()
     cv2.destroyAllWindows()
-
-
+ 
+ 
 if __name__ == "__main__":
     predict_drowsiness()
+ 
