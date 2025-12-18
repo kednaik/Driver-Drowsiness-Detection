@@ -39,6 +39,25 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+Windows (PowerShell / Command Prompt)
+
+```powershell
+python -m venv .venv
+# PowerShell (preferred)
+# If you see an execution policy warning you can temporarily bypass it:
+# Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.venv\Scripts\Activate.ps1
+
+# Or on Command Prompt (cmd.exe):
+# .venv\Scripts\activate
+```
+
+After activating the `.venv` on Windows, run:
+
+```powershell
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 On Debian/Ubuntu systems you may also need to install system build dependencies
 before installing some Python packages (for example `dlib`, `mediapipe`, or
 packages that compile native extensions). Run:
